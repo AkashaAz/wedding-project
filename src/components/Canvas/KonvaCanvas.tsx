@@ -56,6 +56,7 @@ const KonvaCanvas: React.FC<KonvaCanvasProps> = ({
   const transformerRef = useRef<any>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [stageSize, setStageSize] = useState({ width: 800, height: 600 });
+  const [selectedText, setSelectedText] = useState<TextObject | null>(null);
 
   // Text customization states
   const [textSettings, setTextSettings] = useState({
@@ -94,58 +95,13 @@ const KonvaCanvas: React.FC<KonvaCanvasProps> = ({
   const [editingTextId, setEditingTextId] = useState<string | null>(null);
   const [editingPosition, setEditingPosition] = useState({ x: 0, y: 0 });
   const [editingValue, setEditingValue] = useState("");
+  const [isEditingComplete, setIsEditingComplete] = useState(false);
   const textInputRef = useRef<HTMLTextAreaElement>(null);
+  const addTextProcessedRef = useRef<boolean>(false);
 
   // Use external props if provided
   const currentShowJsonModal = externalShowJsonModal ?? showJsonModal;
   const currentShowPreviewModal = externalShowPreviewModal ?? showPreviewModal;
-
-  // Handle new text addition to artboard
-  const handleNewTextAdd = (
-    x: number,
-    y: number,
-    textContent: string = "Double click to edit"
-  ) => {
-    const newText: TextObject = {
-      id: `text-${Date.now()}`,
-      x,
-      y,
-      text: textContent,
-      fontSize: textSettings.fontSize,
-      fontFamily: textSettings.fontFamily,
-      fontStyle: textSettings.fontStyle,
-      fill: textSettings.fill,
-      draggable: true,
-      zIndex:
-        Math.max(
-          ...texts.map((txt) => txt.zIndex),
-          ...images.map((img) => img.zIndex),
-          0
-        ) + 1,
-    };
-    onTextChange?.([...texts, newText]);
-  };
-
-  // Handle new image upload to artboard
-  const handleNewImageUpload = (file: File, x: number, y: number) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const imageUrl = e.target?.result as string;
-      const newImage: ImageObject = {
-        id: `image-${Date.now()}`,
-        x,
-        y,
-        width: 200,
-        height: 150,
-        imageUrl,
-        draggable: true,
-        zIndex: Math.max(...images.map((img) => img.zIndex), 0) + 1,
-        name: file.name,
-      };
-      onImageChange?.([...images, newImage]);
-    };
-    reader.readAsDataURL(file);
-  };
 
   // Generate JSON data for export
   const generateArtboardJson = () => {
@@ -250,6 +206,22 @@ const KonvaCanvas: React.FC<KonvaCanvasProps> = ({
     return () => window.removeEventListener("resize", updateStageSize);
   }, []);
 
+  // Load Google Fonts for decorative text
+  useEffect(() => {
+    const link = document.createElement("link");
+    link.href =
+      "https://fonts.googleapis.com/css2?family=Great+Vibes&family=Dancing+Script:wght@400;700&family=Alex+Brush&family=Parisienne&family=Allura&family=Sacramento&family=Cookie&family=Kaushan+Script&family=Satisfy&family=Herr+Von+Muellerhoff&display=swap";
+    link.rel = "stylesheet";
+    document.head.appendChild(link);
+
+    return () => {
+      // Cleanup on unmount
+      if (document.head.contains(link)) {
+        document.head.removeChild(link);
+      }
+    };
+  }, []);
+
   // Update transformer when selection changes
   useEffect(() => {
     if (selectedId && transformerRef.current) {
@@ -284,21 +256,81 @@ const KonvaCanvas: React.FC<KonvaCanvasProps> = ({
   // Handle external triggers
   useEffect(() => {
     if (triggerFileUpload) {
-      handleFileUpload();
+      // Inline file upload handler to avoid dependency issues
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = "image/*";
+      input.multiple = true;
+      input.onchange = (e) => {
+        const files = Array.from((e.target as HTMLInputElement).files || []);
+        files.forEach((file, index) => {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            const imageUrl = e.target?.result as string;
+            const newImage: ImageObject = {
+              id: `image-${Date.now()}-${index}`,
+              x: 100 + index * 50,
+              y: 100 + index * 50,
+              width: 200,
+              height: 150,
+              imageUrl,
+              draggable: true,
+              zIndex: Math.max(...images.map((img) => img.zIndex), 0) + 1,
+              name: file.name,
+            };
+            onImageChange?.([...images, newImage]);
+          };
+          reader.readAsDataURL(file);
+        });
+      };
+      input.click();
     }
-  }, [triggerFileUpload]);
+  }, [triggerFileUpload, images, onImageChange]);
 
   useEffect(() => {
-    if (triggerAddText) {
+    if (triggerAddText && !addTextProcessedRef.current) {
+      addTextProcessedRef.current = true;
+
       const centerX = artboardPosition.x + artboardSize.width / 2;
       const centerY = artboardPosition.y + totalArtboardHeight / 2;
-      handleNewTextAdd(centerX, centerY);
+      // Inline text add handler
+      const newText: TextObject = {
+        id: `text-${Date.now()}`,
+        x: centerX,
+        y: centerY,
+        text: "Double click to edit",
+        fontSize: textSettings.fontSize,
+        fontFamily: textSettings.fontFamily,
+        fontStyle: textSettings.fontStyle,
+        fill: textSettings.fill,
+        draggable: true,
+        zIndex:
+          Math.max(
+            ...texts.map((txt) => txt.zIndex),
+            ...images.map((img) => img.zIndex),
+            0
+          ) + 1,
+      };
+      onTextChange?.([...texts, newText]);
+    }
+
+    // Reset the flag when triggerAddText becomes false
+    if (!triggerAddText) {
+      addTextProcessedRef.current = false;
     }
   }, [
     triggerAddText,
     artboardPosition.x,
     artboardPosition.y,
     artboardSize.width,
+    totalArtboardHeight,
+    textSettings.fontSize,
+    textSettings.fontFamily,
+    textSettings.fontStyle,
+    textSettings.fill,
+    texts,
+    images,
+    onTextChange,
   ]);
 
   // Auto-scale images when artboard size changes
@@ -468,12 +500,14 @@ const KonvaCanvas: React.FC<KonvaCanvasProps> = ({
 
   const handleImageClick = (image: ImageObject) => {
     setSelectedId(image.id);
+    setSelectedText(null);
     onImageSelect?.(image);
     onTextSelect?.(null);
   };
 
   const handleTextClick = (text: TextObject) => {
     setSelectedId(text.id);
+    setSelectedText(text);
     onTextSelect?.(text);
     onImageSelect?.(null);
 
@@ -490,10 +524,61 @@ const KonvaCanvas: React.FC<KonvaCanvasProps> = ({
     });
   };
 
+  // Apply text settings to selected text
+  const handleTextSettingsChange = (newSettings: typeof textSettings) => {
+    if (!selectedText) return;
+
+    const updatedTexts = texts.map((text) =>
+      text.id === selectedText.id
+        ? {
+            ...text,
+            fontSize: newSettings.fontSize,
+            fontFamily: newSettings.fontFamily,
+            fill: newSettings.fill,
+            fontStyle: newSettings.fontStyle,
+          }
+        : text
+    );
+    onTextChange?.(updatedTexts);
+
+    // Update selectedText state to reflect changes
+    setSelectedText({
+      ...selectedText,
+      fontSize: newSettings.fontSize,
+      fontFamily: newSettings.fontFamily,
+      fill: newSettings.fill,
+      fontStyle: newSettings.fontStyle,
+    });
+  };
+
+  // Delete selected text
+  const handleTextDelete = (textId: string) => {
+    const updatedTexts = texts.filter((text) => text.id !== textId);
+    onTextChange?.(updatedTexts);
+    setSelectedText(null);
+    setSelectedId(null);
+    onTextSelect?.(null);
+  };
+
+  // Duplicate selected text
+  const handleTextDuplicate = (text: TextObject) => {
+    const newText: TextObject = {
+      ...text,
+      id: `text-${Date.now()}`,
+      x: text.x + 20,
+      y: text.y + 20,
+      zIndex: Math.max(...texts.map((t) => t.zIndex), 0) + 1,
+    };
+    onTextChange?.([...texts, newText]);
+  };
+
   const handleTextDoubleClick = (text: TextObject) => {
     // Start inline editing
     setEditingTextId(text.id);
-    setEditingValue(text.text);
+    setIsEditingComplete(false);
+    // If the text is the default placeholder, start with empty string
+    const initialValue = text.text === "Double click to edit" ? "" : text.text;
+    setEditingValue(initialValue);
 
     // Calculate position for input overlay
     const stage = stageRef.current;
@@ -513,25 +598,45 @@ const KonvaCanvas: React.FC<KonvaCanvasProps> = ({
     setTimeout(() => {
       if (textInputRef.current) {
         textInputRef.current.focus();
-        textInputRef.current.select();
+        // Only select all text if it's not the placeholder
+        if (text.text !== "Double click to edit") {
+          textInputRef.current.select();
+        }
       }
     }, 0);
   };
 
   const handleTextEditComplete = () => {
-    if (editingTextId && editingValue !== null) {
+    if (isEditingComplete || !editingTextId || editingValue === null) {
+      return;
+    }
+
+    setIsEditingComplete(true);
+
+    // If the text is empty, remove the text element
+    if (editingValue.trim() === "") {
+      const updatedTexts = texts.filter((t) => t.id !== editingTextId);
+      onTextChange?.(updatedTexts);
+      // Also clear selection
+      setSelectedId(null);
+      setSelectedText(null);
+      onTextSelect?.(null);
+    } else {
       const updatedTexts = texts.map((t) =>
-        t.id === editingTextId ? { ...t, text: editingValue } : t
+        t.id === editingTextId ? { ...t, text: editingValue.trim() } : t
       );
       onTextChange?.(updatedTexts);
     }
+
     setEditingTextId(null);
     setEditingValue("");
+    setIsEditingComplete(false);
   };
 
   const handleTextEditCancel = () => {
     setEditingTextId(null);
     setEditingValue("");
+    setIsEditingComplete(false);
   };
 
   const handleStageClick = (e: any) => {
@@ -541,6 +646,7 @@ const KonvaCanvas: React.FC<KonvaCanvasProps> = ({
       e.target.getClassName() === "Rect"
     ) {
       setSelectedId(null);
+      setSelectedText(null);
       onImageSelect?.(null);
       onTextSelect?.(null);
     }
@@ -582,23 +688,13 @@ const KonvaCanvas: React.FC<KonvaCanvasProps> = ({
     setGuidelines([]);
   };
 
-  // File upload trigger
-  const handleFileUpload = () => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = "image/*";
-    input.multiple = true;
-    input.onchange = (e) => {
-      const files = Array.from((e.target as HTMLInputElement).files || []);
-      files.forEach((file, index) => {
-        handleNewImageUpload(file, 100 + index * 50, 100 + index * 50);
-      });
-    };
-    input.click();
-  };
-
   // Render functions
   const renderText = (text: TextObject) => {
+    // Don't render the text if it's currently being edited
+    if (editingTextId === text.id) {
+      return null;
+    }
+
     return (
       <Text
         key={text.id}
@@ -618,7 +714,6 @@ const KonvaCanvas: React.FC<KonvaCanvasProps> = ({
         onTransformEnd={handleTransformEnd}
         stroke={selectedId === text.id ? "#0066ff" : undefined}
         strokeWidth={selectedId === text.id ? 2 : 0}
-        visible={editingTextId !== text.id}
       />
     );
   };
@@ -647,9 +742,6 @@ const KonvaCanvas: React.FC<KonvaCanvasProps> = ({
       />
     );
   };
-
-  // Sort images by zIndex
-  const sortedImages = [...images].sort((a, b) => a.zIndex - b.zIndex);
 
   // Transform handlers
   const handleImageDragEnd = (e: any, imageId: string) => {
@@ -889,11 +981,12 @@ const KonvaCanvas: React.FC<KonvaCanvasProps> = ({
           })}
 
           {/* Images and Texts (sorted by zIndex) */}
-          {[...sortedImages, ...texts.sort((a, b) => a.zIndex - b.zIndex)]
+          {[...images, ...texts]
             .sort((a, b) => a.zIndex - b.zIndex)
             .map((item) =>
               "imageUrl" in item ? renderImage(item) : renderText(item)
-            )}
+            )
+            .filter(Boolean)}
 
           {/* Section Dividers and Remarks */}
           {renderSectionDividers()}
@@ -966,6 +1059,177 @@ const KonvaCanvas: React.FC<KonvaCanvasProps> = ({
           </div>
         )}
       </div>
+
+      {/* Text Settings Panel */}
+      {selectedText && (
+        <div className="absolute top-4 right-4 w-80 bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden">
+          <div className="p-4 border-b border-gray-100 bg-gray-50">
+            <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+              <span className="mr-2">✏️</span>
+              Text Settings
+            </h3>
+            <p className="text-sm text-gray-500 mt-1">
+              Customize selected text appearance
+            </p>
+          </div>
+
+          <div className="p-4 space-y-4">
+            {/* Font Family */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Font Family
+              </label>
+              <select
+                value={textSettings.fontFamily}
+                onChange={(e) => {
+                  const newSettings = {
+                    ...textSettings,
+                    fontFamily: e.target.value,
+                  };
+                  setTextSettings(newSettings);
+                  handleTextSettingsChange(newSettings);
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+              >
+                <option value="Arial">Arial</option>
+                <option value="Helvetica">Helvetica</option>
+                <option value="Times New Roman">Times New Roman</option>
+                <option value="Georgia">Georgia</option>
+                <option value="Verdana">Verdana</option>
+                <option value="Courier New">Courier New</option>
+                <option value="Impact">Impact</option>
+                <option value="Comic Sans MS">Comic Sans MS</option>
+                <option value="Great Vibes">Great Vibes</option>
+                <option value="Dancing Script">Dancing Script</option>
+                <option value="Alex Brush">Alex Brush</option>
+                <option value="Parisienne">Parisienne</option>
+                <option value="Allura">Allura</option>
+                <option value="Sacramento">Sacramento</option>
+                <option value="Cookie">Cookie</option>
+                <option value="Kaushan Script">Kaushan Script</option>
+                <option value="Satisfy">Satisfy</option>
+                <option value="Herr Von Muellerhoff">
+                  Herr Von Muellerhoff
+                </option>
+              </select>
+            </div>
+
+            {/* Font Size */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Font Size: {textSettings.fontSize}px
+              </label>
+              <input
+                type="range"
+                min="8"
+                max="120"
+                value={textSettings.fontSize}
+                onChange={(e) => {
+                  const newSettings = {
+                    ...textSettings,
+                    fontSize: parseInt(e.target.value),
+                  };
+                  setTextSettings(newSettings);
+                  handleTextSettingsChange(newSettings);
+                }}
+                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+              />
+              <div className="flex justify-between text-xs text-gray-500 mt-1">
+                <span>8px</span>
+                <span>120px</span>
+              </div>
+            </div>
+
+            {/* Font Style */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Font Style
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { value: "normal", label: "Normal" },
+                  { value: "bold", label: "Bold" },
+                  { value: "italic", label: "Italic" },
+                  { value: "bold italic", label: "Bold Italic" },
+                ].map((style) => (
+                  <button
+                    key={style.value}
+                    onClick={() => {
+                      const newSettings = {
+                        ...textSettings,
+                        fontStyle: style.value as typeof textSettings.fontStyle,
+                      };
+                      setTextSettings(newSettings);
+                      handleTextSettingsChange(newSettings);
+                    }}
+                    className={`px-3 py-2 text-sm rounded-lg border transition-all duration-200 ${
+                      textSettings.fontStyle === style.value
+                        ? "bg-blue-500 text-white border-blue-500"
+                        : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                    }`}
+                  >
+                    {style.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Text Color */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Text Color
+              </label>
+              <div className="flex items-center space-x-3">
+                <input
+                  type="color"
+                  value={textSettings.fill}
+                  onChange={(e) => {
+                    const newSettings = {
+                      ...textSettings,
+                      fill: e.target.value,
+                    };
+                    setTextSettings(newSettings);
+                    handleTextSettingsChange(newSettings);
+                  }}
+                  className="w-12 h-10 border border-gray-300 rounded cursor-pointer"
+                />
+                <input
+                  type="text"
+                  value={textSettings.fill}
+                  onChange={(e) => {
+                    const newSettings = {
+                      ...textSettings,
+                      fill: e.target.value,
+                    };
+                    setTextSettings(newSettings);
+                    handleTextSettingsChange(newSettings);
+                  }}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm font-mono"
+                  placeholder="#000000"
+                />
+              </div>
+            </div>
+
+            {/* Quick Actions */}
+            <div className="pt-2 border-t border-gray-100">
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => handleTextDelete(selectedText.id)}
+                  className="px-3 py-2 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-lg text-sm font-medium transition-all duration-200"
+                >
+                  🗑️ Delete
+                </button>
+                <button
+                  onClick={() => handleTextDuplicate(selectedText)}
+                  className="px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 rounded-lg text-sm font-medium transition-all duration-200"
+                >
+                  📋 Duplicate
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* JSON Review Modal */}
       {currentShowJsonModal && (
@@ -1133,10 +1397,7 @@ const KonvaCanvas: React.FC<KonvaCanvasProps> = ({
                     })}
 
                     {/* Preview Images and Texts (sorted by zIndex) */}
-                    {[
-                      ...sortedImages,
-                      ...texts.sort((a, b) => a.zIndex - b.zIndex),
-                    ]
+                    {[...images, ...texts]
                       .sort((a, b) => a.zIndex - b.zIndex)
                       .map((item) => {
                         if ("imageUrl" in item) {

@@ -16,17 +16,10 @@ const DesignStudio: React.FC = () => {
   const [selectedText, setSelectedText] = useState<TextObject | null>(null);
 
   // States for UI controls
-  const [showTextPanel, setShowTextPanel] = useState(false);
   const [showJsonModal, setShowJsonModal] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [triggerFileUpload, setTriggerFileUpload] = useState(false);
   const [triggerAddText, setTriggerAddText] = useState(false);
-  const [textSettings, setTextSettings] = useState({
-    fontSize: 24,
-    fontFamily: "Arial",
-    fill: "#000000",
-    fontStyle: "normal" as "normal" | "bold" | "italic" | "bold italic",
-  });
 
   const handleImageChange = (newImages: ImageObject[]) => {
     setImages(newImages);
@@ -100,10 +93,6 @@ const DesignStudio: React.FC = () => {
     setTimeout(() => setTriggerAddText(false), 100);
   };
 
-  const handleTextSettingsHover = (isHovering: boolean) => {
-    setShowTextPanel(isHovering);
-  };
-
   const handleReviewJSON = () => {
     setShowJsonModal(!showJsonModal);
   };
@@ -128,12 +117,8 @@ const DesignStudio: React.FC = () => {
           onArtboardSizeChange={handleArtboardSizeChange}
           onUploadImages={handleUploadImages}
           onAddText={handleAddText}
-          onTextSettingsHover={handleTextSettingsHover}
           onReviewJSON={handleReviewJSON}
           onPreview={handlePreview}
-          showTextPanel={showTextPanel}
-          textSettings={textSettings}
-          onTextSettingsChange={setTextSettings}
         />
 
         {/* Artboard Area */}
@@ -145,8 +130,6 @@ const DesignStudio: React.FC = () => {
           onTextChange={handleTextChange}
           onImageSelect={handleImageSelect}
           onTextSelect={handleTextSelect}
-          showTextPanel={showTextPanel}
-          onShowTextPanel={setShowTextPanel}
           showJsonModal={showJsonModal}
           onShowJsonModal={setShowJsonModal}
           showPreviewModal={showPreviewModal}
