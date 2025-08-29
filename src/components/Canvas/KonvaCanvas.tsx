@@ -81,6 +81,10 @@ const KonvaCanvas: React.FC<KonvaCanvasProps> = ({
   const [scale, setScale] = useState(1);
   const [position, setPosition] = useState({ x: 0, y: 0 });
 
+  // สำหรับ panning
+  const [isPanning, setIsPanning] = useState(false);
+  const [lastPanPoint, setLastPanPoint] = useState({ x: 0, y: 0 });
+
   // สำหรับ artboard dragging
   const [artboardPosition, setArtboardPosition] = useState({ x: 50, y: 50 });
 
@@ -99,9 +103,109 @@ const KonvaCanvas: React.FC<KonvaCanvasProps> = ({
   const textInputRef = useRef<HTMLTextAreaElement>(null);
   const addTextProcessedRef = useRef<boolean>(false);
 
+  // Context menu states
+  const [contextMenu, setContextMenu] = useState<{
+    visible: boolean;
+    x: number;
+    y: number;
+    elementId: string;
+    elementType: "image" | "text";
+  } | null>(null);
+
   // Use external props if provided
   const currentShowJsonModal = externalShowJsonModal ?? showJsonModal;
   const currentShowPreviewModal = externalShowPreviewModal ?? showPreviewModal;
+
+  // Layer management functions
+  const moveElementForward = (
+    elementId: string,
+    elementType: "image" | "text"
+  ) => {
+    if (elementType === "image") {
+      const allElements = [...images, ...texts];
+      const maxZIndex = Math.max(...allElements.map((el) => el.zIndex));
+      const updatedImages = images.map((img) =>
+        img.id === elementId
+          ? { ...img, zIndex: Math.min(img.zIndex + 1, maxZIndex + 1) }
+          : img
+      );
+      onImageChange?.(updatedImages);
+    } else {
+      const allElements = [...images, ...texts];
+      const maxZIndex = Math.max(...allElements.map((el) => el.zIndex));
+      const updatedTexts = texts.map((txt) =>
+        txt.id === elementId
+          ? { ...txt, zIndex: Math.min(txt.zIndex + 1, maxZIndex + 1) }
+          : txt
+      );
+      onTextChange?.(updatedTexts);
+    }
+  };
+
+  const moveElementBackward = (
+    elementId: string,
+    elementType: "image" | "text"
+  ) => {
+    if (elementType === "image") {
+      const allElements = [...images, ...texts];
+      const minZIndex = Math.min(...allElements.map((el) => el.zIndex));
+      const updatedImages = images.map((img) =>
+        img.id === elementId
+          ? { ...img, zIndex: Math.max(img.zIndex - 1, minZIndex - 1) }
+          : img
+      );
+      onImageChange?.(updatedImages);
+    } else {
+      const allElements = [...images, ...texts];
+      const minZIndex = Math.min(...allElements.map((el) => el.zIndex));
+      const updatedTexts = texts.map((txt) =>
+        txt.id === elementId
+          ? { ...txt, zIndex: Math.max(txt.zIndex - 1, minZIndex - 1) }
+          : txt
+      );
+      onTextChange?.(updatedTexts);
+    }
+  };
+
+  const moveElementToFront = (
+    elementId: string,
+    elementType: "image" | "text"
+  ) => {
+    const allElements = [...images, ...texts];
+    const maxZIndex = Math.max(...allElements.map((el) => el.zIndex));
+
+    if (elementType === "image") {
+      const updatedImages = images.map((img) =>
+        img.id === elementId ? { ...img, zIndex: maxZIndex + 1 } : img
+      );
+      onImageChange?.(updatedImages);
+    } else {
+      const updatedTexts = texts.map((txt) =>
+        txt.id === elementId ? { ...txt, zIndex: maxZIndex + 1 } : txt
+      );
+      onTextChange?.(updatedTexts);
+    }
+  };
+
+  const moveElementToBack = (
+    elementId: string,
+    elementType: "image" | "text"
+  ) => {
+    const allElements = [...images, ...texts];
+    const minZIndex = Math.min(...allElements.map((el) => el.zIndex));
+
+    if (elementType === "image") {
+      const updatedImages = images.map((img) =>
+        img.id === elementId ? { ...img, zIndex: minZIndex - 1 } : img
+      );
+      onImageChange?.(updatedImages);
+    } else {
+      const updatedTexts = texts.map((txt) =>
+        txt.id === elementId ? { ...txt, zIndex: minZIndex - 1 } : txt
+      );
+      onTextChange?.(updatedTexts);
+    }
+  };
 
   // Generate JSON data for export
   const generateArtboardJson = () => {
@@ -235,6 +339,26 @@ const KonvaCanvas: React.FC<KonvaCanvasProps> = ({
       transformerRef.current.getLayer().batchDraw();
     }
   }, [selectedId]);
+
+  // ลบรูปเมื่อกดปุ่ม Delete หรือ Backspace
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.key === "Delete" || event.key === "Backspace") && selectedId) {
+        // เช็คว่า selectedId เป็นรูปภาพ
+        const selectedImage = images.find((img) => img.id === selectedId);
+        if (selectedImage) {
+          const updatedImages = images.filter((img) => img.id !== selectedId);
+          onImageChange?.(updatedImages);
+          setSelectedId(null);
+          onImageSelect?.(null);
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [selectedId, images, onImageChange, onImageSelect]);
 
   // Handle text editing focus and auto-resize
   useEffect(() => {
@@ -503,6 +627,19 @@ const KonvaCanvas: React.FC<KonvaCanvasProps> = ({
     setSelectedText(null);
     onImageSelect?.(image);
     onTextSelect?.(null);
+    setContextMenu(null); // Hide context menu when selecting normally
+  };
+
+  const handleImageRightClick = (e: any, image: ImageObject) => {
+    e.evt.preventDefault(); // Prevent browser context menu
+
+    setContextMenu({
+      visible: true,
+      x: e.evt.clientX,
+      y: e.evt.clientY,
+      elementId: image.id,
+      elementType: "image",
+    });
   };
 
   const handleTextClick = (text: TextObject) => {
@@ -510,6 +647,7 @@ const KonvaCanvas: React.FC<KonvaCanvasProps> = ({
     setSelectedText(text);
     onTextSelect?.(text);
     onImageSelect?.(null);
+    setContextMenu(null); // Hide context menu when selecting normally
 
     // โหลด settings จาก selected text
     setTextSettings({
@@ -521,6 +659,18 @@ const KonvaCanvas: React.FC<KonvaCanvasProps> = ({
         | "bold"
         | "italic"
         | "bold italic",
+    });
+  };
+
+  const handleTextRightClick = (e: any, text: TextObject) => {
+    e.evt.preventDefault(); // Prevent browser context menu
+
+    setContextMenu({
+      visible: true,
+      x: e.evt.clientX,
+      y: e.evt.clientY,
+      elementId: text.id,
+      elementType: "text",
     });
   };
 
@@ -649,6 +799,8 @@ const KonvaCanvas: React.FC<KonvaCanvasProps> = ({
       setSelectedText(null);
       onImageSelect?.(null);
       onTextSelect?.(null);
+      // Only hide context menu when clicking on stage/artboard
+      setContextMenu(null);
     }
   };
 
@@ -712,6 +864,7 @@ const KonvaCanvas: React.FC<KonvaCanvasProps> = ({
         onDragMove={() => handleTextDragMove()}
         onDragEnd={(e) => handleTextDragEnd(e, text.id)}
         onTransformEnd={handleTransformEnd}
+        onContextMenu={(e) => handleTextRightClick(e, text)}
         stroke={selectedId === text.id ? "#0066ff" : undefined}
         strokeWidth={selectedId === text.id ? 2 : 0}
       />
@@ -736,6 +889,7 @@ const KonvaCanvas: React.FC<KonvaCanvasProps> = ({
         onDragMove={(e) => handleImageDragMove(e, image.id)}
         onDragEnd={(e) => handleImageDragEnd(e, image.id)}
         onTransformEnd={handleTransformEnd}
+        onContextMenu={(e) => handleImageRightClick(e, image)}
         stroke={selectedId === image.id ? "#0066ff" : undefined}
         strokeWidth={selectedId === image.id ? 2 : 0}
         alt=""
@@ -838,14 +992,64 @@ const KonvaCanvas: React.FC<KonvaCanvasProps> = ({
     setPosition(newPos);
   };
 
-  // Handle wheel zoom
+  // Handle wheel zoom and trackpad pan (like Figma)
   const handleWheel = (e: any) => {
     e.evt.preventDefault();
 
-    const scaleBy = 1.02;
+    const evt = e.evt;
     const stage = stageRef.current;
     if (!stage) return;
 
+    // ตรวจจับการ zoom ก่อน (pinch gesture หรือ Ctrl+scroll)
+    if (evt.ctrlKey || evt.metaKey) {
+      // Pinch to zoom หรือ Ctrl+scroll
+      const scaleBy = 1.02;
+      const oldScale = scale;
+      const pointer = stage.getPointerPosition();
+
+      if (!pointer) return;
+
+      const mousePointTo = {
+        x: (pointer.x - position.x) / oldScale,
+        y: (pointer.y - position.y) / oldScale,
+      };
+
+      const direction = evt.deltaY > 0 ? -1 : 1;
+      const newScale = direction > 0 ? oldScale * scaleBy : oldScale / scaleBy;
+
+      // Limit zoom
+      if (newScale < 0.1 || newScale > 5) return;
+
+      const newPos = {
+        x: pointer.x - mousePointTo.x * newScale,
+        y: pointer.y - mousePointTo.y * newScale,
+      };
+
+      setScale(newScale);
+      setPosition(newPos);
+      return;
+    }
+
+    // ตรวจจับ trackpad two-finger pan
+    // เงื่อนไขที่เข้มงวดขึ้น: ต้องมี deltaX และ deltaY ไม่ใหญ่เกินไป (ไม่ใช่ mouse wheel)
+    const hasHorizontalMovement = Math.abs(evt.deltaX) > 0.1;
+    const isNotMouseWheel =
+      Math.abs(evt.deltaY) < 50 && Math.abs(evt.deltaX) < 50;
+    const isTrackpadPan =
+      hasHorizontalMovement && isNotMouseWheel && !evt.ctrlKey && !evt.metaKey;
+
+    if (isTrackpadPan) {
+      // Two-finger pan gesture like Figma
+      const panSensitivity = 1;
+      setPosition({
+        x: position.x - evt.deltaX * panSensitivity,
+        y: position.y - evt.deltaY * panSensitivity,
+      });
+      return;
+    }
+
+    // ถ้าไม่ใช่ pan และไม่ใช่ zoom ที่มี modifier = mouse wheel zoom
+    const scaleBy = 1.02;
     const oldScale = scale;
     const pointer = stage.getPointerPosition();
 
@@ -856,7 +1060,7 @@ const KonvaCanvas: React.FC<KonvaCanvasProps> = ({
       y: (pointer.y - position.y) / oldScale,
     };
 
-    const direction = e.evt.deltaY > 0 ? -1 : 1;
+    const direction = evt.deltaY > 0 ? -1 : 1;
     const newScale = direction > 0 ? oldScale * scaleBy : oldScale / scaleBy;
 
     // Limit zoom
@@ -876,6 +1080,54 @@ const KonvaCanvas: React.FC<KonvaCanvasProps> = ({
     setScale(1);
     setPosition({ x: 0, y: 0 });
     setArtboardPosition({ x: 50, y: 50 });
+  };
+
+  // Handle panning
+  const handleMouseDown = (e: any) => {
+    // เช็คว่าคลิกในพื้นที่ว่าง (ไม่ใช่ artboard หรือ element)
+    const target = e.target;
+    const isStage = target === target.getStage();
+    const isGridLine =
+      target.getClassName() === "Line" &&
+      target.attrs.stroke === "rgba(0,0,0,0.1)";
+    const isArtboard =
+      target.getClassName() === "Rect" && target.attrs.fill === "white";
+
+    // อนุญาตให้ pan เมื่อคลิกใน stage หรือ grid lines แต่ไม่ใช่ artboard
+    if ((isStage || isGridLine) && !isArtboard) {
+      setIsPanning(true);
+      const stage = stageRef.current;
+      if (stage) {
+        const pointer = stage.getPointerPosition();
+        if (pointer) {
+          setLastPanPoint({ x: pointer.x, y: pointer.y });
+        }
+      }
+    }
+  };
+
+  const handleMouseMove = () => {
+    if (!isPanning) return;
+
+    const stage = stageRef.current;
+    if (!stage) return;
+
+    const pointer = stage.getPointerPosition();
+    if (!pointer) return;
+
+    const dx = pointer.x - lastPanPoint.x;
+    const dy = pointer.y - lastPanPoint.y;
+
+    setPosition({
+      x: position.x + dx,
+      y: position.y + dy,
+    });
+
+    setLastPanPoint({ x: pointer.x, y: pointer.y });
+  };
+
+  const handleMouseUp = () => {
+    setIsPanning(false);
   };
 
   // Handle artboard drag
@@ -906,41 +1158,44 @@ const KonvaCanvas: React.FC<KonvaCanvasProps> = ({
         y={position.y}
         onWheel={handleWheel}
         onClick={handleStageClick}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
         ref={stageRef}
       >
         <Layer>
-          {/* Grid Pattern */}
+          {/* Grid Pattern - Full coverage optimized dots */}
           {Array.from(
-            { length: Math.ceil(stageSize.width / (20 * scale)) + 1 },
-            (_, i) => (
-              <Line
-                key={`grid-v-${i}`}
-                points={[
-                  i * 20 * scale - (position.x % (20 * scale)),
-                  0,
-                  i * 20 * scale - (position.x % (20 * scale)),
-                  stageSize.height,
-                ]}
-                stroke="rgba(0,0,0,0.1)"
-                strokeWidth={0.5}
-              />
-            )
+            { length: Math.ceil((stageSize.width * 2) / 20) + 10 },
+            (_, i) => {
+              const x = (i - 5) * 20 - (position.x % 20);
+              return (
+                <Line
+                  key={`grid-v-${i}`}
+                  points={[x, -stageSize.height * 2, x, stageSize.height * 4]}
+                  stroke="rgba(0,0,0,0.12)"
+                  strokeWidth={1.2 / scale}
+                  dash={[0.8, 19.2]}
+                  lineCap="round"
+                />
+              );
+            }
           )}
           {Array.from(
-            { length: Math.ceil(stageSize.height / (20 * scale)) + 1 },
-            (_, i) => (
-              <Line
-                key={`grid-h-${i}`}
-                points={[
-                  0,
-                  i * 20 * scale - (position.y % (20 * scale)),
-                  stageSize.width,
-                  i * 20 * scale - (position.y % (20 * scale)),
-                ]}
-                stroke="rgba(0,0,0,0.1)"
-                strokeWidth={0.5}
-              />
-            )
+            { length: Math.ceil((stageSize.height * 2) / 20) + 10 },
+            (_, i) => {
+              const y = (i - 5) * 20 - (position.y % 20);
+              return (
+                <Line
+                  key={`grid-h-${i}`}
+                  points={[-stageSize.width * 2, y, stageSize.width * 4, y]}
+                  stroke="rgba(0,0,0,0.12)"
+                  strokeWidth={1.2 / scale}
+                  dash={[0.8, 19.2]}
+                  lineCap="round"
+                />
+              );
+            }
           )}
 
           {/* Artboard Background */}
@@ -1550,6 +1805,87 @@ const KonvaCanvas: React.FC<KonvaCanvasProps> = ({
             autoFocus
           />
         </div>
+      )}
+
+      {/* Context Menu */}
+      {contextMenu?.visible && (
+        <>
+          {/* Background overlay to catch clicks outside */}
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => setContextMenu(null)}
+          />
+
+          <div
+            className="fixed bg-white rounded-lg shadow-lg border border-gray-200 z-50 py-2 min-w-[180px]"
+            style={{
+              left: contextMenu.x,
+              top: contextMenu.y,
+            }}
+          >
+            <div className="px-3 py-2 text-xs text-gray-500 border-b border-gray-100">
+              Layer Options
+            </div>
+
+            <button
+              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center"
+              onClick={() => {
+                moveElementForward(
+                  contextMenu.elementId,
+                  contextMenu.elementType
+                );
+                setContextMenu(null);
+              }}
+            >
+              <span className="mr-2">⬆️</span>
+              Bring Forward
+            </button>
+
+            <button
+              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center"
+              onClick={() => {
+                moveElementBackward(
+                  contextMenu.elementId,
+                  contextMenu.elementType
+                );
+                setContextMenu(null);
+              }}
+            >
+              <span className="mr-2">⬇️</span>
+              Send Backward
+            </button>
+
+            <div className="border-t border-gray-100 mt-1 pt-1">
+              <button
+                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center"
+                onClick={() => {
+                  moveElementToFront(
+                    contextMenu.elementId,
+                    contextMenu.elementType
+                  );
+                  setContextMenu(null);
+                }}
+              >
+                <span className="mr-2">⏫</span>
+                Bring to Front
+              </button>
+
+              <button
+                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center"
+                onClick={() => {
+                  moveElementToBack(
+                    contextMenu.elementId,
+                    contextMenu.elementType
+                  );
+                  setContextMenu(null);
+                }}
+              >
+                <span className="mr-2">⏬</span>
+                Send to Back
+              </button>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );
