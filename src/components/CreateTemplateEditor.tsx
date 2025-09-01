@@ -24,6 +24,11 @@ interface ArtboardElement {
   fontWeight?: string;
   textAlign?: string;
   borderRadius?: number;
+  // Individual border radius for corners
+  borderTopLeftRadius?: number;
+  borderTopRightRadius?: number;
+  borderBottomLeftRadius?: number;
+  borderBottomRightRadius?: number;
   shapeType?:
     | "rect"
     | "circle"
@@ -34,6 +39,7 @@ interface ArtboardElement {
     | "star"; // for shape types
   strokeColor?: string; // for shape stroke
   strokeWidth?: number; // for shape stroke width
+  strokeStyle?: "solid" | "dashed" | "dotted"; // stroke style
 }
 
 const CreateTemplateEditor: React.FC = () => {
@@ -150,9 +156,14 @@ const CreateTemplateEditor: React.FC = () => {
         zIndex: nextZIndex,
         backgroundColor: "#8b5cf6",
         borderRadius: shapeType === "rect" ? 8 : 0,
+        borderTopLeftRadius: shapeType === "rect" ? 8 : 0,
+        borderTopRightRadius: shapeType === "rect" ? 8 : 0,
+        borderBottomLeftRadius: shapeType === "rect" ? 8 : 0,
+        borderBottomRightRadius: shapeType === "rect" ? 8 : 0,
         shapeType: shapeType,
         strokeColor: "#6d28d9",
         strokeWidth: 2,
+        strokeStyle: "solid",
       };
       setElements((prev) => [...prev, newElement]);
       setNextZIndex((prev) => prev + 1);
@@ -799,8 +810,17 @@ const CreateTemplateEditor: React.FC = () => {
                           height={element.height}
                           backgroundColor={element.backgroundColor || "#8b5cf6"}
                           borderRadius={element.borderRadius}
+                          borderTopLeftRadius={element.borderTopLeftRadius}
+                          borderTopRightRadius={element.borderTopRightRadius}
+                          borderBottomLeftRadius={
+                            element.borderBottomLeftRadius
+                          }
+                          borderBottomRightRadius={
+                            element.borderBottomRightRadius
+                          }
                           strokeColor={element.strokeColor}
                           strokeWidth={element.strokeWidth}
+                          strokeStyle={element.strokeStyle}
                           backgroundImage={element.src}
                           onDoubleClick={() =>
                             handleShapeImageUpload(element.id)
@@ -1194,24 +1214,141 @@ const CreateTemplateEditor: React.FC = () => {
 
                         {element.shapeType === "rect" && (
                           <div className="bg-purple-50 rounded-lg p-4">
-                            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-3">
+                            <label className="block text-sm font-medium text-gray-700 mb-3">
                               Border Radius
-                              <span className="text-xs text-gray-500 bg-white px-2 py-1 rounded">
-                                {element.borderRadius || 0}px
-                              </span>
                             </label>
-                            <input
-                              type="range"
-                              min="0"
-                              max="50"
-                              value={element.borderRadius || 0}
-                              onChange={(e) =>
-                                updateElementContent(element.id, {
-                                  borderRadius: parseInt(e.target.value) || 0,
-                                })
-                              }
-                              className="w-full accent-purple-500"
-                            />
+
+                            {/* Global Border Radius */}
+                            <div className="mb-4">
+                              <label className="flex items-center gap-2 text-xs text-gray-600 mb-2">
+                                All Corners
+                                <span className="text-xs text-gray-500 bg-white px-2 py-1 rounded">
+                                  {element.borderRadius || 0}px
+                                </span>
+                              </label>
+                              <input
+                                type="range"
+                                min="0"
+                                max="50"
+                                value={element.borderRadius || 0}
+                                onChange={(e) => {
+                                  const radius = parseInt(e.target.value) || 0;
+                                  updateElementContent(element.id, {
+                                    borderRadius: radius,
+                                    borderTopLeftRadius: radius,
+                                    borderTopRightRadius: radius,
+                                    borderBottomLeftRadius: radius,
+                                    borderBottomRightRadius: radius,
+                                  });
+                                }}
+                                className="w-full accent-purple-500"
+                              />
+                            </div>
+
+                            {/* Individual Corner Controls */}
+                            <div className="space-y-2">
+                              <label className="text-xs text-gray-600 mb-2 block">
+                                Individual Corners:
+                              </label>
+
+                              <div className="grid grid-cols-2 gap-2">
+                                {/* Top Left */}
+                                <div>
+                                  <label className="text-xs text-gray-500 mb-1 block">
+                                    Top Left
+                                  </label>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max="50"
+                                    value={
+                                      element.borderTopLeftRadius ??
+                                      element.borderRadius ??
+                                      0
+                                    }
+                                    onChange={(e) =>
+                                      updateElementContent(element.id, {
+                                        borderTopLeftRadius:
+                                          parseInt(e.target.value) || 0,
+                                      })
+                                    }
+                                    className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 bg-white"
+                                  />
+                                </div>
+
+                                {/* Top Right */}
+                                <div>
+                                  <label className="text-xs text-gray-500 mb-1 block">
+                                    Top Right
+                                  </label>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max="50"
+                                    value={
+                                      element.borderTopRightRadius ??
+                                      element.borderRadius ??
+                                      0
+                                    }
+                                    onChange={(e) =>
+                                      updateElementContent(element.id, {
+                                        borderTopRightRadius:
+                                          parseInt(e.target.value) || 0,
+                                      })
+                                    }
+                                    className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 bg-white"
+                                  />
+                                </div>
+
+                                {/* Bottom Left */}
+                                <div>
+                                  <label className="text-xs text-gray-500 mb-1 block">
+                                    Bottom Left
+                                  </label>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max="50"
+                                    value={
+                                      element.borderBottomLeftRadius ??
+                                      element.borderRadius ??
+                                      0
+                                    }
+                                    onChange={(e) =>
+                                      updateElementContent(element.id, {
+                                        borderBottomLeftRadius:
+                                          parseInt(e.target.value) || 0,
+                                      })
+                                    }
+                                    className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 bg-white"
+                                  />
+                                </div>
+
+                                {/* Bottom Right */}
+                                <div>
+                                  <label className="text-xs text-gray-500 mb-1 block">
+                                    Bottom Right
+                                  </label>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max="50"
+                                    value={
+                                      element.borderBottomRightRadius ??
+                                      element.borderRadius ??
+                                      0
+                                    }
+                                    onChange={(e) =>
+                                      updateElementContent(element.id, {
+                                        borderBottomRightRadius:
+                                          parseInt(e.target.value) || 0,
+                                      })
+                                    }
+                                    className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 bg-white"
+                                  />
+                                </div>
+                              </div>
+                            </div>
                           </div>
                         )}
 
@@ -1265,6 +1402,27 @@ const CreateTemplateEditor: React.FC = () => {
                               <span className="text-xs text-gray-500 bg-white px-2 py-1 rounded min-w-[35px] text-center">
                                 {element.strokeWidth || 0}px
                               </span>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <label className="text-xs text-gray-600 w-12">
+                                Style:
+                              </label>
+                              <select
+                                value={element.strokeStyle || "solid"}
+                                onChange={(e) =>
+                                  updateElementContent(element.id, {
+                                    strokeStyle: e.target.value as
+                                      | "solid"
+                                      | "dashed"
+                                      | "dotted",
+                                  })
+                                }
+                                className="flex-1 px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 bg-white"
+                              >
+                                <option value="solid">Solid</option>
+                                <option value="dashed">Dashed</option>
+                                <option value="dotted">Dotted</option>
+                              </select>
                             </div>
                           </div>
                         </div>

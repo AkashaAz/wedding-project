@@ -15,8 +15,13 @@ interface ShapeRendererProps {
   height: number;
   backgroundColor: string;
   borderRadius?: number;
+  borderTopLeftRadius?: number;
+  borderTopRightRadius?: number;
+  borderBottomLeftRadius?: number;
+  borderBottomRightRadius?: number;
   strokeColor?: string;
   strokeWidth?: number;
+  strokeStyle?: "solid" | "dashed" | "dotted";
   backgroundImage?: string;
   onDoubleClick?: () => void;
   onMouseDown?: (e: React.MouseEvent) => void;
@@ -29,8 +34,13 @@ const ShapeRenderer: React.FC<ShapeRendererProps> = ({
   height,
   backgroundColor,
   borderRadius = 0,
+  borderTopLeftRadius,
+  borderTopRightRadius,
+  borderBottomLeftRadius,
+  borderBottomRightRadius,
   strokeColor,
   strokeWidth = 0,
+  strokeStyle = "solid",
   backgroundImage,
   onDoubleClick,
   onMouseDown,
@@ -56,13 +66,38 @@ const ShapeRenderer: React.FC<ShapeRendererProps> = ({
     }
   };
 
+  const getBorderRadius = () => {
+    if (shapeType !== "rect") return "0";
+
+    // If individual border radius values are provided, use them
+    if (
+      borderTopLeftRadius !== undefined ||
+      borderTopRightRadius !== undefined ||
+      borderBottomLeftRadius !== undefined ||
+      borderBottomRightRadius !== undefined
+    ) {
+      const tl = borderTopLeftRadius ?? borderRadius;
+      const tr = borderTopRightRadius ?? borderRadius;
+      const bl = borderBottomLeftRadius ?? borderRadius;
+      const br = borderBottomRightRadius ?? borderRadius;
+      return `${tl}px ${tr}px ${br}px ${bl}px`;
+    }
+
+    return `${borderRadius}px`;
+  };
+
+  const getStrokeBorder = () => {
+    if (strokeWidth <= 0) return "none";
+    return `${strokeWidth}px ${strokeStyle} ${strokeColor}`;
+  };
+
   const shapeStyle: React.CSSProperties = {
     width: `${width}px`,
     height: `${height}px`,
     backgroundColor,
-    borderRadius: shapeType === "rect" ? `${borderRadius}px` : 0,
+    borderRadius: getBorderRadius(),
     clipPath: getShapeClipPath(),
-    border: strokeWidth > 0 ? `${strokeWidth}px solid ${strokeColor}` : "none",
+    border: getStrokeBorder(),
     backgroundImage: backgroundImage ? `url(${backgroundImage})` : "none",
     backgroundSize: "cover",
     backgroundPosition: "center",
