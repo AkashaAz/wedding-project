@@ -19,6 +19,7 @@ import type {
   ArtboardSize,
 } from "@/types/Shape";
 import ShapeContainerComponent from "./components/ShapeContainer";
+import PreviewModal from "./components/PreviewModal";
 
 interface KonvaCanvasWithShapesProps {
   images: ImageObject[];
@@ -119,6 +120,8 @@ const KonvaCanvasWithShapes: React.FC<KonvaCanvasWithShapesProps> = ({
   onShapeSelect,
   triggerFileUpload,
   triggerAddText,
+  showPreviewModal,
+  onShowPreviewModal,
 }) => {
   const stageRef = useRef<any>(null);
   const transformerRef = useRef<any>(null);
@@ -212,6 +215,56 @@ const KonvaCanvasWithShapes: React.FC<KonvaCanvasWithShapesProps> = ({
     }
   }, [redo, onImageChange, onTextChange, onShapeContainerChange]);
 
+  // Delete selected object
+  const handleDelete = useCallback(() => {
+    if (!selectedId) return;
+
+    // Check if it's an image
+    const imageToDelete = images.find((img) => img.id === selectedId);
+    if (imageToDelete) {
+      const updatedImages = images.filter((img) => img.id !== selectedId);
+      handleImageChange(updatedImages);
+      setSelectedId(null);
+      onImageSelect?.(null);
+      return;
+    }
+
+    // Check if it's a text
+    const textToDelete = texts.find((text) => text.id === selectedId);
+    if (textToDelete) {
+      const updatedTexts = texts.filter((text) => text.id !== selectedId);
+      handleTextChange(updatedTexts);
+      setSelectedId(null);
+      onTextSelect?.(null);
+      return;
+    }
+
+    // Check if it's a shape container
+    const shapeToDelete = shapeContainers.find(
+      (shape) => shape.id === selectedId
+    );
+    if (shapeToDelete) {
+      const updatedShapes = shapeContainers.filter(
+        (shape) => shape.id !== selectedId
+      );
+      handleShapeContainerChange(updatedShapes);
+      setSelectedId(null);
+      onShapeSelect?.(null);
+      return;
+    }
+  }, [
+    selectedId,
+    images,
+    texts,
+    shapeContainers,
+    handleImageChange,
+    handleTextChange,
+    handleShapeContainerChange,
+    onImageSelect,
+    onTextSelect,
+    onShapeSelect,
+  ]);
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -224,12 +277,15 @@ const KonvaCanvasWithShapes: React.FC<KonvaCanvasWithShapesProps> = ({
       ) {
         e.preventDefault();
         handleRedo();
+      } else if (e.key === "Delete" || e.key === "Backspace") {
+        e.preventDefault();
+        handleDelete();
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handleUndo, handleRedo]);
+  }, [handleUndo, handleRedo, handleDelete]);
 
   // File upload handler
   const handleFileUpload = useCallback(() => {
@@ -245,13 +301,33 @@ const KonvaCanvasWithShapes: React.FC<KonvaCanvasWithShapesProps> = ({
           const imageUrl = e.target?.result as string;
           const img = new window.Image();
           img.onload = () => {
+            // Calculate position inside artboard with some padding
+            const padding = 20;
+            const centerX = artboardPosition.x + artboardSize.width / 2;
+            const centerY = artboardPosition.y + artboardSize.height / 2;
+
+            // Scale image to fit within artboard if too large
+            const maxWidth = artboardSize.width - padding * 2;
+            const maxHeight = artboardSize.height - padding * 2;
+            let width = Math.min(img.width, 300);
+            let height = Math.min(img.height, 300);
+
+            // Keep aspect ratio while fitting in artboard
+            if (width > maxWidth || height > maxHeight) {
+              const scaleX = maxWidth / width;
+              const scaleY = maxHeight / height;
+              const scale = Math.min(scaleX, scaleY);
+              width *= scale;
+              height *= scale;
+            }
+
             const newImage: ImageObject = {
               id: `image_${Date.now()}_${Math.random()}`,
               imageUrl,
-              x: 50,
-              y: 50,
-              width: Math.min(img.width, 300),
-              height: Math.min(img.height, 300),
+              x: centerX - width / 2,
+              y: centerY - height / 2,
+              width,
+              height,
               draggable: true,
               zIndex: images.length + 1,
             };
@@ -264,7 +340,14 @@ const KonvaCanvasWithShapes: React.FC<KonvaCanvasWithShapesProps> = ({
       });
     };
     input.click();
-  }, [images, handleImageChange]);
+  }, [
+    images,
+    handleImageChange,
+    artboardPosition.x,
+    artboardPosition.y,
+    artboardSize.width,
+    artboardSize.height,
+  ]);
 
   // Add text handler
   const handleAddText = useCallback(() => {
@@ -784,6 +867,31 @@ const KonvaCanvasWithShapes: React.FC<KonvaCanvasWithShapesProps> = ({
           />
         </div>
       )}
+
+      {/* Preview Modal */}
+      <PreviewModal
+        isOpen={showPreviewModal || false}
+        onClose={() => onShowPreviewModal?.(false)}
+        artboardSize={artboardSize}
+        artboardPosition={artboardPosition}
+        sections={[]}
+        images={images}
+        texts={texts}
+        shapeContainers={shapeContainers}
+        totalArtboardHeight={artboardSize.height}
+        jsonData={{
+          images: images,
+          texts: texts,
+          shapeContainers: shapeContainers,
+          artboardSize: artboardSize,
+        }}
+        onImageReplace={() => {}}
+        onTextEdit={() => {}}
+        onImageDragEnd={() => {}}
+        onTextDragEnd={() => {}}
+        isPreviewMode={false}
+        setIsPreviewMode={() => {}}
+      />
     </div>
   );
 };
