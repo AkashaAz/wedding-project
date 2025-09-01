@@ -136,7 +136,10 @@ const KonvaCanvasWithShapes: React.FC<KonvaCanvasWithShapesProps> = ({
   const [position, setPosition] = useState({ x: 0, y: 0 });
 
   // Artboard position state
-  const [artboardPosition, setArtboardPosition] = useState({ x: 50, y: 50 });
+  const [artboardPosition, setArtboardPosition] = useState({
+    x: stageSize.width / 2 - artboardSize.width / 2,
+    y: stageSize.height / 2 - artboardSize.height / 2,
+  });
 
   // Stage panning states
   const [isPanning, setIsPanning] = useState(false);
@@ -299,9 +302,20 @@ const KonvaCanvasWithShapes: React.FC<KonvaCanvasWithShapesProps> = ({
   // Update stage size on mount
   useEffect(() => {
     const updateSize = () => {
+      // เพิ่มขนาด stage ให้ใหญ่ขึ้นเพื่อให้ background ครอบคลุมทั้งหมด
+      const padding = 500; // เพิ่ม padding ให้มากขึ้น
+      const newWidth = Math.max(2000, artboardSize.width + padding * 2); // ขนาดขั้นต่ำ 2000px
+      const newHeight = Math.max(1500, artboardSize.height + padding * 2); // ขนาดขั้นต่ำ 1500px
+
       setStageSize({
-        width: Math.max(1200, artboardSize.width + 200),
-        height: Math.max(800, artboardSize.height + 200),
+        width: newWidth,
+        height: newHeight,
+      });
+
+      // อัปเดตตำแหน่ง artboard ให้อยู่ตรงกลาง
+      setArtboardPosition({
+        x: newWidth / 2 - artboardSize.width / 2,
+        y: newHeight / 2 - artboardSize.height / 2,
       });
     };
     updateSize();
@@ -518,23 +532,51 @@ const KonvaCanvasWithShapes: React.FC<KonvaCanvasWithShapesProps> = ({
         onMouseUp={handleMouseUp}
       >
         <Layer>
+          {/* Background */}
+          <Rect
+            x={-stageSize.width}
+            y={-stageSize.height}
+            width={stageSize.width * 3}
+            height={stageSize.height * 3}
+            fill="#f5f5f5"
+            listening={false}
+          />
+
           {/* Grid */}
-          {Array.from({ length: Math.ceil(stageSize.width / 20) }, (_, i) => (
-            <Line
-              key={`v-${i}`}
-              points={[i * 20, 0, i * 20, stageSize.height]}
-              stroke="#e0e0e0"
-              strokeWidth={0.5}
-            />
-          ))}
-          {Array.from({ length: Math.ceil(stageSize.height / 20) }, (_, i) => (
-            <Line
-              key={`h-${i}`}
-              points={[0, i * 20, stageSize.width, i * 20]}
-              stroke="#e0e0e0"
-              strokeWidth={0.5}
-            />
-          ))}
+          {Array.from(
+            { length: Math.ceil((stageSize.width * 3) / 20) },
+            (_, i) => (
+              <Line
+                key={`v-${i}`}
+                points={[
+                  i * 20 - stageSize.width,
+                  -stageSize.height,
+                  i * 20 - stageSize.width,
+                  stageSize.height * 2,
+                ]}
+                stroke="#e0e0e0"
+                strokeWidth={0.5}
+                listening={false}
+              />
+            )
+          )}
+          {Array.from(
+            { length: Math.ceil((stageSize.height * 3) / 20) },
+            (_, i) => (
+              <Line
+                key={`h-${i}`}
+                points={[
+                  -stageSize.width,
+                  i * 20 - stageSize.height,
+                  stageSize.width * 2,
+                  i * 20 - stageSize.height,
+                ]}
+                stroke="#e0e0e0"
+                strokeWidth={0.5}
+                listening={false}
+              />
+            )
+          )}
 
           {/* Artboard */}
           <Rect
