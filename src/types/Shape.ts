@@ -10,6 +10,23 @@ export interface ImageObject {
   name?: string; // ชื่อของรูป
 }
 
+export interface ShapeContainer {
+  id: string;
+  type: "circle" | "rect" | "ellipse" | "triangle";
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  fill: string;
+  stroke?: string;
+  strokeWidth?: number;
+  draggable: boolean;
+  zIndex: number;
+  imageUrl?: string; // รูปภาพที่อยู่ใน shape
+  name?: string;
+  cropEnabled?: boolean; // เปิด/ปิด การ crop รูป
+}
+
 export interface TextObject {
   id: string;
   x: number;

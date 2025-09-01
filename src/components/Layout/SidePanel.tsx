@@ -1,14 +1,15 @@
 "use client";
 
-import React from "react";
+import React, { useState, useRef, useEffect } from "react";
 import ArtboardSizeSelector from "./ArtboardSizeSelector";
-import { ArtboardSize } from "@/types/Shape";
+import { ArtboardSize, ShapeContainer } from "@/types/Shape";
 
 interface SidePanelProps {
   selectedArtboardSize: ArtboardSize;
   onArtboardSizeChange: (size: ArtboardSize) => void;
   onUploadImages?: () => void;
   onAddText?: () => void;
+  onAddShapeContainer?: (shapeType: ShapeContainer["type"]) => void;
   onReviewJSON?: () => void;
   onPreview?: () => void;
 }
@@ -18,9 +19,41 @@ const SidePanel: React.FC<SidePanelProps> = ({
   onArtboardSizeChange,
   onUploadImages,
   onAddText,
+  onAddShapeContainer,
   onReviewJSON,
   onPreview,
 }) => {
+  const [isShapeDropdownOpen, setIsShapeDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const shapes = [
+    { type: "rect" as const, label: "Rectangle", icon: "⬜" },
+    { type: "circle" as const, label: "Circle", icon: "⭕" },
+    { type: "ellipse" as const, label: "Ellipse", icon: "🔵" },
+    { type: "triangle" as const, label: "Triangle", icon: "🔺" },
+  ];
+
+  const handleShapeSelect = (shapeType: ShapeContainer["type"]) => {
+    onAddShapeContainer?.(shapeType);
+    setIsShapeDropdownOpen(false);
+  };
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsShapeDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
   return (
     <div className="w-64 h-full bg-white border-r border-gray-200 flex flex-col shadow-sm">
       {/* Panel Header */}
@@ -45,7 +78,7 @@ const SidePanel: React.FC<SidePanelProps> = ({
         {/* Tools Section */}
         <div>
           <h4 className="text-sm font-medium text-gray-900 mb-3">
-            Quick Actions
+            Add Elements
           </h4>
           <div className="space-y-3">
             <button
@@ -67,6 +100,57 @@ const SidePanel: React.FC<SidePanelProps> = ({
               </div>
               <span>Add Text</span>
             </button>
+          </div>
+        </div>
+
+        {/* Shape Frames Section */}
+        <div>
+          <h4 className="text-sm font-medium text-gray-900 mb-3">
+            Shape Frames
+          </h4>
+          <p className="text-xs text-gray-500 mb-3">
+            Add shapes that can contain images
+          </p>
+
+          <div className="relative" ref={dropdownRef}>
+            <button
+              onClick={() => setIsShapeDropdownOpen(!isShapeDropdownOpen)}
+              className="w-full px-4 py-3 bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-700 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-between group hover:shadow-sm"
+            >
+              <div className="flex items-center">
+                <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center mr-3 group-hover:bg-orange-200 transition-colors">
+                  <span className="text-orange-600">🔳</span>
+                </div>
+                <span>Add Shape Frame</span>
+              </div>
+              <span
+                className={`transform transition-transform ${
+                  isShapeDropdownOpen ? "rotate-180" : ""
+                }`}
+              >
+                ▼
+              </span>
+            </button>
+
+            {/* Dropdown Menu */}
+            {isShapeDropdownOpen && (
+              <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
+                {shapes.map((shape) => (
+                  <button
+                    key={shape.type}
+                    onClick={() => handleShapeSelect(shape.type)}
+                    className="w-full px-4 py-3 text-left hover:bg-gray-50 flex items-center transition-colors first:rounded-t-lg last:rounded-b-lg"
+                  >
+                    <span className="text-lg mr-3">{shape.icon}</span>
+                    <span className="text-sm text-gray-700">{shape.label}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="mt-2 text-xs text-gray-500 text-center">
+            💡 Double-click shape to add image
           </div>
         </div>
 

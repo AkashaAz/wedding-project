@@ -2,16 +2,24 @@
 
 import React from "react";
 import dynamic from "next/dynamic";
-import type { ImageObject, TextObject, ArtboardSize } from "@/types/Shape";
+import type {
+  ImageObject,
+  TextObject,
+  ShapeContainer,
+  ArtboardSize,
+} from "@/types/Shape";
 
 interface ArtboardProps {
   images: ImageObject[];
   texts: TextObject[];
+  shapeContainers?: ShapeContainer[];
   artboardSize: ArtboardSize;
   onImageChange?: (images: ImageObject[]) => void;
   onTextChange?: (texts: TextObject[]) => void;
+  onShapeContainerChange?: (shapes: ShapeContainer[]) => void;
   onImageSelect?: (image: ImageObject | null) => void;
   onTextSelect?: (text: TextObject | null) => void;
+  onShapeSelect?: (shape: ShapeContainer | null) => void;
   showTextPanel?: boolean;
   onShowTextPanel?: (show: boolean) => void;
   showJsonModal?: boolean;
@@ -25,7 +33,7 @@ interface ArtboardProps {
 // Create a dynamically imported component that handles Konva
 const DynamicKonvaCanvas = dynamic(
   () =>
-    import("@/components/Canvas/KonvaCanvas").then((mod) => ({
+    import("@/components/Canvas/KonvaCanvasWithShapes").then((mod) => ({
       default: mod.default,
     })),
   {
