@@ -69,33 +69,106 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
   const artboardX = artboardPosition.x;
   const artboardY = artboardPosition.y;
 
-  // Filter function to check if object is inside artboard
-  const isInsideArtboard = (
+  // Filter function to check if object overlaps with artboard (more flexible)
+  const isOverlappingArtboard = (
     x: number,
     y: number,
     width: number,
     height: number
   ) => {
+    // Check if object overlaps with artboard (not necessarily completely inside)
     return (
-      x >= artboardX &&
-      y >= artboardY &&
-      x + width <= artboardX + artboardSize.width &&
-      y + height <= artboardY + artboardSize.height
+      x < artboardX + artboardSize.width &&
+      x + width > artboardX &&
+      y < artboardY + artboardSize.height &&
+      y + height > artboardY
     );
   };
 
-  // Filter objects that are inside artboard
-  const artboardImages = images.filter((img) =>
-    isInsideArtboard(img.x, img.y, img.width, img.height)
-  );
+  // Filter objects that overlap with artboard and adjust their positions
+  const artboardImages = images
+    .filter((img) => isOverlappingArtboard(img.x, img.y, img.width, img.height))
+    .map((img) => {
+      // Calculate relative position within artboard
+      let relativeX = img.x - artboardX;
+      let relativeY = img.y - artboardY;
 
-  const artboardTexts = texts.filter((text) =>
-    isInsideArtboard(text.x, text.y, text.width || 100, text.height || 30)
-  );
+      // Clamp to ensure visibility (don't go completely outside preview bounds)
+      relativeX = Math.max(
+        -img.width + 10,
+        Math.min(relativeX, artboardSize.width - 10)
+      );
+      relativeY = Math.max(
+        -img.height + 10,
+        Math.min(relativeY, artboardSize.height - 10)
+      );
 
-  const artboardShapes = shapeContainers.filter((shape) =>
-    isInsideArtboard(shape.x, shape.y, shape.width, shape.height)
-  );
+      return {
+        ...img,
+        x: relativeX,
+        y: relativeY,
+      };
+    });
+
+  const artboardTexts = texts
+    .filter((text) =>
+      isOverlappingArtboard(
+        text.x,
+        text.y,
+        text.width || 100,
+        text.height || 30
+      )
+    )
+    .map((text) => {
+      // Calculate relative position within artboard
+      let relativeX = text.x - artboardX;
+      let relativeY = text.y - artboardY;
+
+      const textWidth = text.width || 100;
+      const textHeight = text.height || 30;
+
+      // Clamp to ensure visibility
+      relativeX = Math.max(
+        -textWidth + 10,
+        Math.min(relativeX, artboardSize.width - 10)
+      );
+      relativeY = Math.max(
+        -textHeight + 10,
+        Math.min(relativeY, artboardSize.height - 10)
+      );
+
+      return {
+        ...text,
+        x: relativeX,
+        y: relativeY,
+      };
+    });
+
+  const artboardShapes = shapeContainers
+    .filter((shape) =>
+      isOverlappingArtboard(shape.x, shape.y, shape.width, shape.height)
+    )
+    .map((shape) => {
+      // Calculate relative position within artboard
+      let relativeX = shape.x - artboardX;
+      let relativeY = shape.y - artboardY;
+
+      // Clamp to ensure visibility
+      relativeX = Math.max(
+        -shape.width + 10,
+        Math.min(relativeX, artboardSize.width - 10)
+      );
+      relativeY = Math.max(
+        -shape.height + 10,
+        Math.min(relativeY, artboardSize.height - 10)
+      );
+
+      return {
+        ...shape,
+        x: relativeX,
+        y: relativeY,
+      };
+    });
 
   const handleClose = () => {
     onClose();
@@ -136,21 +209,20 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
         </div>
         <div className="overflow-auto max-h-[85vh] bg-gradient-to-br from-gray-50 to-gray-100 p-4 rounded-xl border">
           {/* Preview Canvas */}
-          <div className="flex justify-center items-center bg-gray-50 p-6 rounded-xl mb-4">
-            <div className="bg-white shadow-lg rounded-lg overflow-hidden border border-gray-200">
+          <div className="flex justify-center items-center bg-gray-50 p-6 rounded-xl mb-4 overflow-auto">
+            <div
+              className="bg-white shadow-lg rounded-lg overflow-hidden border border-gray-200"
+              style={{
+                maxWidth: "90vw",
+                maxHeight: "70vh",
+                overflow: "auto",
+              }}
+            >
               <Stage
-                width={Math.min(artboardSize.width, 800)}
-                height={Math.min(totalArtboardHeight, 600)}
-                scaleX={Math.min(
-                  800 / artboardSize.width,
-                  600 / totalArtboardHeight,
-                  1
-                )}
-                scaleY={Math.min(
-                  800 / artboardSize.width,
-                  600 / totalArtboardHeight,
-                  1
-                )}
+                width={artboardSize.width}
+                height={totalArtboardHeight}
+                scaleX={1}
+                scaleY={1}
               >
                 <Layer>
                   {/* Preview Artboard Background */}
@@ -193,13 +265,13 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                     // Render ShapeContainer - ทั้งกรอบและรูปภาพข้างใน
                     const shapeElements = [];
 
-                    // Background shape - adjust position relative to artboard
+                    // Background shape - position is already adjusted
                     if (shape.type === "circle") {
                       shapeElements.push(
                         <Circle
                           key={`shape-bg-${shape.id}`}
-                          x={shape.x - artboardX + shape.width / 2}
-                          y={shape.y - artboardY + shape.height / 2}
+                          x={shape.x + shape.width / 2}
+                          y={shape.y + shape.height / 2}
                           radius={Math.min(shape.width, shape.height) / 2}
                           fill={shape.imageUrl ? "transparent" : shape.fill}
                           stroke={shape.stroke || "#999"}
@@ -210,8 +282,8 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                       shapeElements.push(
                         <Rect
                           key={`shape-bg-${shape.id}`}
-                          x={shape.x - artboardX}
-                          y={shape.y - artboardY}
+                          x={shape.x}
+                          y={shape.y}
                           width={shape.width}
                           height={shape.height}
                           fill={shape.imageUrl ? "transparent" : shape.fill}
@@ -230,19 +302,14 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                         ctx.beginPath();
                         if (shape.type === "circle") {
                           ctx.arc(
-                            shape.x - artboardX + shape.width / 2,
-                            shape.y - artboardY + shape.height / 2,
+                            shape.x + shape.width / 2,
+                            shape.y + shape.height / 2,
                             Math.min(shape.width, shape.height) / 2,
                             0,
                             Math.PI * 2
                           );
                         } else {
-                          ctx.rect(
-                            shape.x - artboardX,
-                            shape.y - artboardY,
-                            shape.width,
-                            shape.height
-                          );
+                          ctx.rect(shape.x, shape.y, shape.width, shape.height);
                         }
                         ctx.clip();
                         ctx.restore();
@@ -254,8 +321,8 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                           clipFunc={clipFunc}
                         >
                           <Image
-                            x={shape.x - artboardX}
-                            y={shape.y - artboardY}
+                            x={shape.x}
+                            y={shape.y}
                             width={shape.width}
                             height={shape.height}
                             image={img}
@@ -263,13 +330,13 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                         </Group>
                       );
 
-                      // Border on top - adjust position relative to artboard
+                      // Border on top - position is already adjusted
                       if (shape.type === "circle") {
                         shapeElements.push(
                           <Circle
                             key={`shape-border-${shape.id}`}
-                            x={shape.x - artboardX + shape.width / 2}
-                            y={shape.y - artboardY + shape.height / 2}
+                            x={shape.x + shape.width / 2}
+                            y={shape.y + shape.height / 2}
                             radius={Math.min(shape.width, shape.height) / 2}
                             fill="transparent"
                             stroke={shape.stroke || "#999"}
@@ -280,8 +347,8 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                         shapeElements.push(
                           <Rect
                             key={`shape-border-${shape.id}`}
-                            x={shape.x - artboardX}
-                            y={shape.y - artboardY}
+                            x={shape.x}
+                            y={shape.y}
                             width={shape.width}
                             height={shape.height}
                             fill="transparent"
@@ -300,14 +367,14 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                     .sort((a, b) => a.zIndex - b.zIndex)
                     .map((item) => {
                       if ("imageUrl" in item) {
-                        // Render Image with direct image creation - adjust position relative to artboard
+                        // Render Image with direct image creation - position is already adjusted
                         const img = createImageElement(item.imageUrl);
 
                         return (
                           <Image
                             key={`preview-${item.id}`}
-                            x={item.x - artboardX}
-                            y={item.y - artboardY}
+                            x={item.x}
+                            y={item.y}
                             width={item.width}
                             height={item.height}
                             image={img}
@@ -321,12 +388,12 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                           />
                         );
                       } else {
-                        // Render Text with drag capability - adjust position relative to artboard
+                        // Render Text with drag capability - position is already adjusted
                         return (
                           <Text
                             key={`preview-text-${item.id}`}
-                            x={item.x - artboardX}
-                            y={item.y - artboardY}
+                            x={item.x}
+                            y={item.y}
                             text={item.text}
                             fontSize={item.fontSize}
                             fontFamily={item.fontFamily}
