@@ -2,6 +2,8 @@
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import Image from "next/image";
+import ShapeSelector from "./ShapeSelector";
+import ShapeRenderer from "./ShapeRenderer";
 
 // Types for our artboard elements
 interface ArtboardElement {
@@ -22,6 +24,16 @@ interface ArtboardElement {
   fontWeight?: string;
   textAlign?: string;
   borderRadius?: number;
+  shapeType?:
+    | "rect"
+    | "circle"
+    | "ellipse"
+    | "triangle"
+    | "pentagon"
+    | "hexagon"
+    | "star"; // for shape types
+  strokeColor?: string; // for shape stroke
+  strokeWidth?: number; // for shape stroke width
 }
 
 const CreateTemplateEditor: React.FC = () => {
@@ -116,22 +128,37 @@ const CreateTemplateEditor: React.FC = () => {
   }, [nextZIndex]);
 
   // Add shape element
-  const addShapeElement = useCallback(() => {
-    const newElement: ArtboardElement = {
-      id: `shape_${Date.now()}`,
-      type: "shape",
-      x: 200,
-      y: 200,
-      width: 100,
-      height: 100,
-      rotation: 0,
-      zIndex: nextZIndex,
-      backgroundColor: "#3b82f6",
-      borderRadius: 8,
-    };
-    setElements((prev) => [...prev, newElement]);
-    setNextZIndex((prev) => prev + 1);
-  }, [nextZIndex]);
+  const addShapeElement = useCallback(
+    (
+      shapeType:
+        | "rect"
+        | "circle"
+        | "ellipse"
+        | "triangle"
+        | "pentagon"
+        | "hexagon"
+        | "star" = "rect"
+    ) => {
+      const newElement: ArtboardElement = {
+        id: `shape_${Date.now()}`,
+        type: "shape",
+        x: 200,
+        y: 200,
+        width: 100,
+        height: 100,
+        rotation: 0,
+        zIndex: nextZIndex,
+        backgroundColor: "#8b5cf6",
+        borderRadius: shapeType === "rect" ? 8 : 0,
+        shapeType: shapeType,
+        strokeColor: "#6d28d9",
+        strokeWidth: 2,
+      };
+      setElements((prev) => [...prev, newElement]);
+      setNextZIndex((prev) => prev + 1);
+    },
+    [nextZIndex]
+  );
 
   // Delete element
   const deleteElement = useCallback(() => {
@@ -366,6 +393,29 @@ const CreateTemplateEditor: React.FC = () => {
     []
   );
 
+  // Handle shape image upload on double click
+  const handleShapeImageUpload = useCallback(
+    (elementId: string) => {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = "image/*";
+      input.onchange = (e) => {
+        const file = (e.target as HTMLInputElement).files?.[0];
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            updateElementContent(elementId, {
+              src: e.target?.result as string,
+            });
+          };
+          reader.readAsDataURL(file);
+        }
+      };
+      input.click();
+    },
+    [updateElementContent]
+  );
+
   // Simple mouse event handlers
   const handleMouseDown = useCallback(
     (e: React.MouseEvent, elementId: string) => {
@@ -488,12 +538,7 @@ const CreateTemplateEditor: React.FC = () => {
           >
             Add Image
           </button>
-          <button
-            onClick={addShapeElement}
-            className="px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-600 transition-colors"
-          >
-            Add Shape
-          </button>
+          <ShapeSelector onShapeSelect={addShapeElement} />
           <button
             onClick={deleteElement}
             disabled={!selectedElement}
@@ -506,31 +551,31 @@ const CreateTemplateEditor: React.FC = () => {
           {selectedElement && (
             <>
               <div className="border-l border-gray-300 h-8 mx-2"></div>
-              <div className="flex gap-2">
+              <div className="flex gap-1">
                 <button
                   onClick={bringToFront}
-                  className="px-3 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors text-sm"
+                  className="px-2 py-1.5 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors text-xs"
                   title="Bring to Front"
                 >
                   ⬆️ Front
                 </button>
                 <button
                   onClick={bringForward}
-                  className="px-3 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors text-sm"
+                  className="px-2 py-1.5 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors text-xs"
                   title="Bring Forward"
                 >
                   ↑ Forward
                 </button>
                 <button
                   onClick={sendBackward}
-                  className="px-3 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors text-sm"
+                  className="px-2 py-1.5 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors text-xs"
                   title="Send Backward"
                 >
                   ↓ Backward
                 </button>
                 <button
                   onClick={sendToBack}
-                  className="px-3 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors text-sm"
+                  className="px-2 py-1.5 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors text-xs"
                   title="Send to Back"
                 >
                   ⬇️ Back
@@ -748,13 +793,20 @@ const CreateTemplateEditor: React.FC = () => {
                       )}
 
                       {element.type === "shape" && (
-                        <div
+                        <ShapeRenderer
+                          shapeType={element.shapeType || "rect"}
+                          width={element.width}
+                          height={element.height}
+                          backgroundColor={element.backgroundColor || "#8b5cf6"}
+                          borderRadius={element.borderRadius}
+                          strokeColor={element.strokeColor}
+                          strokeWidth={element.strokeWidth}
+                          backgroundImage={element.src}
+                          onDoubleClick={() =>
+                            handleShapeImageUpload(element.id)
+                          }
                           onMouseDown={(e) => handleMouseDown(e, element.id)}
-                          className="w-full h-full cursor-move"
-                          style={{
-                            backgroundColor: element.backgroundColor,
-                            borderRadius: `${element.borderRadius || 0}px`,
-                          }}
+                          className="w-full h-full"
                         />
                       )}
 
@@ -1084,6 +1136,35 @@ const CreateTemplateEditor: React.FC = () => {
                       <>
                         <div className="bg-purple-50 rounded-lg p-4">
                           <label className="block text-sm font-medium text-gray-700 mb-3">
+                            Shape Type
+                          </label>
+                          <select
+                            value={element.shapeType || "rect"}
+                            onChange={(e) =>
+                              updateElementContent(element.id, {
+                                shapeType: e.target.value as
+                                  | "rect"
+                                  | "circle"
+                                  | "ellipse"
+                                  | "triangle"
+                                  | "pentagon"
+                                  | "hexagon"
+                                  | "star",
+                              })
+                            }
+                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all bg-white text-gray-800"
+                          >
+                            <option value="rect">Rectangle</option>
+                            <option value="circle">Circle</option>
+                            <option value="ellipse">Ellipse</option>
+                            <option value="triangle">Triangle</option>
+                            <option value="pentagon">Pentagon</option>
+                            <option value="hexagon">Hexagon</option>
+                            <option value="star">Star</option>
+                          </select>
+                        </div>
+                        <div className="bg-purple-50 rounded-lg p-4">
+                          <label className="block text-sm font-medium text-gray-700 mb-3">
                             Background Color
                           </label>
                           <div className="flex items-center gap-3">
@@ -1110,25 +1191,111 @@ const CreateTemplateEditor: React.FC = () => {
                             />
                           </div>
                         </div>
+
+                        {element.shapeType === "rect" && (
+                          <div className="bg-purple-50 rounded-lg p-4">
+                            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-3">
+                              Border Radius
+                              <span className="text-xs text-gray-500 bg-white px-2 py-1 rounded">
+                                {element.borderRadius || 0}px
+                              </span>
+                            </label>
+                            <input
+                              type="range"
+                              min="0"
+                              max="50"
+                              value={element.borderRadius || 0}
+                              onChange={(e) =>
+                                updateElementContent(element.id, {
+                                  borderRadius: parseInt(e.target.value) || 0,
+                                })
+                              }
+                              className="w-full accent-purple-500"
+                            />
+                          </div>
+                        )}
+
                         <div className="bg-purple-50 rounded-lg p-4">
-                          <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-3">
-                            Border Radius
-                            <span className="text-xs text-gray-500 bg-white px-2 py-1 rounded">
-                              {element.borderRadius || 0}px
-                            </span>
+                          <label className="block text-sm font-medium text-gray-700 mb-3">
+                            Stroke
                           </label>
-                          <input
-                            type="range"
-                            min="0"
-                            max="50"
-                            value={element.borderRadius || 0}
-                            onChange={(e) =>
-                              updateElementContent(element.id, {
-                                borderRadius: parseInt(e.target.value) || 0,
-                              })
-                            }
-                            className="w-full accent-purple-500"
-                          />
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-3">
+                              <label className="text-xs text-gray-600 w-12">
+                                Color:
+                              </label>
+                              <input
+                                type="color"
+                                value={element.strokeColor || "#6d28d9"}
+                                onChange={(e) =>
+                                  updateElementContent(element.id, {
+                                    strokeColor: e.target.value,
+                                  })
+                                }
+                                className="w-8 h-8 border border-gray-200 rounded cursor-pointer"
+                              />
+                              <input
+                                type="text"
+                                value={element.strokeColor || "#6d28d9"}
+                                onChange={(e) =>
+                                  updateElementContent(element.id, {
+                                    strokeColor: e.target.value,
+                                  })
+                                }
+                                className="flex-1 px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 bg-white font-mono"
+                                placeholder="#6d28d9"
+                              />
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <label className="text-xs text-gray-600 w-12">
+                                Width:
+                              </label>
+                              <input
+                                type="range"
+                                min="0"
+                                max="10"
+                                value={element.strokeWidth || 0}
+                                onChange={(e) =>
+                                  updateElementContent(element.id, {
+                                    strokeWidth: parseInt(e.target.value) || 0,
+                                  })
+                                }
+                                className="flex-1 accent-purple-500"
+                              />
+                              <span className="text-xs text-gray-500 bg-white px-2 py-1 rounded min-w-[35px] text-center">
+                                {element.strokeWidth || 0}px
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="bg-purple-50 rounded-lg p-4">
+                          <label className="block text-sm font-medium text-gray-700 mb-3">
+                            Shape Image
+                          </label>
+                          <div className="space-y-2">
+                            <button
+                              onClick={() => handleShapeImageUpload(element.id)}
+                              className="w-full px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm"
+                            >
+                              {element.src ? "Replace Image" : "Upload Image"}
+                            </button>
+                            {element.src && (
+                              <button
+                                onClick={() =>
+                                  updateElementContent(element.id, {
+                                    src: undefined,
+                                  })
+                                }
+                                className="w-full px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors text-sm"
+                              >
+                                Remove Image
+                              </button>
+                            )}
+                            <p className="text-xs text-gray-500 mt-1">
+                              Double-click the shape to upload an image
+                            </p>
+                          </div>
                         </div>
                       </>
                     )}
