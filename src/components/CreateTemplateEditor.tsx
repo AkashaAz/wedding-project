@@ -8,7 +8,7 @@ import ShapeRenderer from "./ShapeRenderer";
 // Types for our artboard elements
 interface ArtboardElement {
   id: string;
-  type: "text" | "image" | "shape";
+  type: "text" | "image" | "shape" | "group";
   x: number;
   y: number;
   width: number;
@@ -40,11 +40,23 @@ interface ArtboardElement {
   strokeColor?: string; // for shape stroke
   strokeWidth?: number; // for shape stroke width
   strokeStyle?: "solid" | "dashed" | "dotted"; // stroke style
+  // Group properties
+  children?: string[]; // array of child element IDs for groups
+  parentId?: string; // parent group ID for grouped elements
+}
+
+interface ContextMenuPosition {
+  x: number;
+  y: number;
 }
 
 const CreateTemplateEditor: React.FC = () => {
   const [elements, setElements] = useState<ArtboardElement[]>([]);
   const [selectedElement, setSelectedElement] = useState<string | null>(null);
+  const [selectedElements, setSelectedElements] = useState<string[]>([]); // Multi-selection
+  const [contextMenu, setContextMenu] = useState<ContextMenuPosition | null>(
+    null
+  ); // Context menu
   const [nextZIndex, setNextZIndex] = useState(1);
   const artboardRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{
@@ -176,8 +188,93 @@ const CreateTemplateEditor: React.FC = () => {
     if (selectedElement) {
       setElements((prev) => prev.filter((el) => el.id !== selectedElement));
       setSelectedElement(null);
+    } else if (selectedElements.length > 0) {
+      setElements((prev) =>
+        prev.filter((el) => !selectedElements.includes(el.id))
+      );
+      setSelectedElements([]);
     }
-  }, [selectedElement]);
+  }, [selectedElement, selectedElements]);
+
+  // Group selected elements
+  const groupElements = useCallback(() => {
+    if (selectedElements.length < 2) return;
+
+    const elementsToGroup = elements.filter(
+      (el) => selectedElements.includes(el.id) && !el.parentId
+    );
+    if (elementsToGroup.length < 2) return;
+
+    // Calculate bounding box for the group
+    const minX = Math.min(...elementsToGroup.map((el) => el.x));
+    const minY = Math.min(...elementsToGroup.map((el) => el.y));
+    const maxX = Math.max(...elementsToGroup.map((el) => el.x + el.width));
+    const maxY = Math.max(...elementsToGroup.map((el) => el.y + el.height));
+
+    const groupId = `group_${Date.now()}`;
+    const groupElement: ArtboardElement = {
+      id: groupId,
+      type: "group",
+      x: minX,
+      y: minY,
+      width: maxX - minX,
+      height: maxY - minY,
+      rotation: 0,
+      zIndex: Math.max(...elementsToGroup.map((el) => el.zIndex)),
+      children: elementsToGroup.map((el) => el.id),
+    };
+
+    // Update elements: add group and update children with relative positions and parentId
+    setElements((prev) => {
+      const updated = prev.map((el) => {
+        if (selectedElements.includes(el.id)) {
+          return {
+            ...el,
+            x: el.x - minX,
+            y: el.y - minY,
+            parentId: groupId,
+          };
+        }
+        return el;
+      });
+      return [...updated, groupElement];
+    });
+
+    setSelectedElements([]);
+    setSelectedElement(groupId);
+    setNextZIndex((prev) => prev + 1);
+  }, [selectedElements, elements]);
+
+  // Ungroup selected group
+  const ungroupElements = useCallback(() => {
+    if (!selectedElement) return;
+
+    const group = elements.find(
+      (el) => el.id === selectedElement && el.type === "group"
+    );
+    if (!group || !group.children) return;
+
+    // Update children to absolute positions and remove parentId
+    setElements((prev) => {
+      const updated = prev
+        .map((el) => {
+          if (group.children?.includes(el.id)) {
+            return {
+              ...el,
+              x: el.x + group.x,
+              y: el.y + group.y,
+              parentId: undefined,
+            };
+          }
+          return el;
+        })
+        .filter((el) => el.id !== selectedElement); // Remove the group
+
+      return updated;
+    });
+
+    setSelectedElement(null);
+  }, [selectedElement, elements]);
 
   // Layer management functions
   const bringToFront = useCallback(() => {
@@ -432,7 +529,23 @@ const CreateTemplateEditor: React.FC = () => {
     (e: React.MouseEvent, elementId: string) => {
       if (e.button !== 0) return; // Only left click
 
-      setSelectedElement(elementId);
+      // Handle multi-selection with Shift key
+      if (e.shiftKey) {
+        setSelectedElements((prev) => {
+          if (prev.includes(elementId)) {
+            return prev.filter((id) => id !== elementId);
+          } else {
+            return [...prev, elementId];
+          }
+        });
+        setSelectedElement(null);
+      } else {
+        // Single selection
+        if (selectedElements.length > 0) {
+          setSelectedElements([]);
+        }
+        setSelectedElement(elementId);
+      }
 
       // Start drag tracking for non-text elements or drag handle
       const element = elements.find((el) => el.id === elementId);
@@ -449,11 +562,9 @@ const CreateTemplateEditor: React.FC = () => {
           startY: e.clientY,
           elementId,
         };
-
-        // Don't automatically bring to front - let user control layers manually
       }
     },
-    [elements]
+    [elements, selectedElements]
   );
 
   const handleMouseMove = useCallback(
@@ -476,16 +587,53 @@ const CreateTemplateEditor: React.FC = () => {
         (el) => el.id === dragRef.current.elementId
       );
       if (element) {
-        updateElementContent(dragRef.current.elementId, {
-          x: Math.max(0, element.x + deltaX),
-          y: Math.max(0, element.y + deltaY),
-        });
+        // If dragging a group, move all children
+        if (element.type === "group" && element.children) {
+          setElements((prev) =>
+            prev.map((el) => {
+              if (el.id === element.id) {
+                return {
+                  ...el,
+                  x: Math.max(0, el.x + deltaX),
+                  y: Math.max(0, el.y + deltaY),
+                };
+              } else if (element.children?.includes(el.id)) {
+                // Children positions are relative to group, so they don't need to move
+                return el;
+              }
+              return el;
+            })
+          );
+        } else if (
+          selectedElements.length > 1 &&
+          selectedElements.includes(element.id)
+        ) {
+          // Move all selected elements together
+          setElements((prev) =>
+            prev.map((el) => {
+              if (selectedElements.includes(el.id) && !el.parentId) {
+                return {
+                  ...el,
+                  x: Math.max(0, el.x + deltaX),
+                  y: Math.max(0, el.y + deltaY),
+                };
+              }
+              return el;
+            })
+          );
+        } else {
+          // Single element movement
+          updateElementContent(dragRef.current.elementId, {
+            x: Math.max(0, element.x + deltaX),
+            y: Math.max(0, element.y + deltaY),
+          });
+        }
       }
 
       dragRef.current.startX = e.clientX;
       dragRef.current.startY = e.clientY;
     },
-    [elements, updateElementContent]
+    [elements, updateElementContent, selectedElements]
   );
 
   const handleMouseUp = useCallback(() => {
@@ -516,26 +664,66 @@ const CreateTemplateEditor: React.FC = () => {
   // Handle keyboard events
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Delete" && selectedElement) {
-        deleteElement();
+      if (e.key === "Delete") {
+        if (selectedElement || selectedElements.length > 0) {
+          deleteElement();
+        }
+      }
+      if (e.key === "Escape") {
+        setSelectedElement(null);
+        setSelectedElements([]);
+        setContextMenu(null);
       }
     };
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [selectedElement, deleteElement]);
+  }, [selectedElement, selectedElements, deleteElement]);
 
   // Click outside to deselect
   const handleArtboardClick = useCallback((e: React.MouseEvent) => {
     if (e.target === artboardRef.current) {
       setSelectedElement(null);
+      setSelectedElements([]);
+      setContextMenu(null);
     }
+  }, []);
+
+  // Handle context menu (right-click)
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent, elementId?: string) => {
+      e.preventDefault();
+
+      if (elementId) {
+        // Right-clicked on an element
+        if (
+          !selectedElements.includes(elementId) &&
+          selectedElement !== elementId
+        ) {
+          setSelectedElement(elementId);
+          setSelectedElements([]);
+        }
+      }
+
+      setContextMenu({
+        x: e.clientX,
+        y: e.clientY,
+      });
+    },
+    [selectedElement, selectedElements]
+  );
+
+  // Close context menu when clicking elsewhere
+  useEffect(() => {
+    const handleClick = () => setContextMenu(null);
+    document.addEventListener("click", handleClick);
+    return () => document.removeEventListener("click", handleClick);
   }, []);
 
   return (
     <div className="w-full max-w-7xl mx-auto p-6">
       {/* Toolbar */}
-      <div className="mb-6 bg-white rounded-lg shadow-md p-4">
+      <div className="mb-6 bg-white rounded-lg shadow-md p-4 relative">
         <div className="flex flex-wrap gap-4 items-center">
           <button
             onClick={addTextElement}
@@ -550,9 +738,30 @@ const CreateTemplateEditor: React.FC = () => {
             Add Image
           </button>
           <ShapeSelector onShapeSelect={addShapeElement} />
+
+          {/* Group/Ungroup buttons */}
+          {selectedElements.length >= 2 && (
+            <button
+              onClick={groupElements}
+              className="px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-600 transition-colors"
+            >
+              Group
+            </button>
+          )}
+          {selectedElement &&
+            elements.find((el) => el.id === selectedElement)?.type ===
+              "group" && (
+              <button
+                onClick={ungroupElements}
+                className="px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-600 transition-colors"
+              >
+                Ungroup
+              </button>
+            )}
+
           <button
             onClick={deleteElement}
-            disabled={!selectedElement}
+            disabled={!selectedElement && selectedElements.length === 0}
             className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
           >
             Delete
@@ -608,6 +817,15 @@ const CreateTemplateEditor: React.FC = () => {
             Import JSON
           </button>
         </div>
+
+        {/* Multi-selection info - Fixed position overlay */}
+        {selectedElements.length > 0 && (
+          <div className="absolute top-full left-0 right-0 z-10 text-sm text-white bg-blue-600 px-3 py-2 shadow-lg">
+            {selectedElements.length} element
+            {selectedElements.length > 1 ? "s" : ""} selected. Hold Shift and
+            click to select multiple elements. Right-click for group options.
+          </div>
+        )}
       </div>
 
       <div className="flex gap-6">
@@ -617,6 +835,7 @@ const CreateTemplateEditor: React.FC = () => {
             <div
               ref={artboardRef}
               onClick={handleArtboardClick}
+              onContextMenu={(e) => handleContextMenu(e)}
               className="relative bg-white border-2 border-gray-200 mx-auto overflow-hidden"
               style={{
                 width: "800px",
@@ -625,15 +844,19 @@ const CreateTemplateEditor: React.FC = () => {
               }}
             >
               {elements
+                .filter((el) => !el.parentId) // Only render top-level elements (groups and ungrouped elements)
                 .sort((a, b) => a.zIndex - b.zIndex) // Sort by zIndex for proper layering
                 .map((element) => {
                   const isSelected = selectedElement === element.id;
+                  const isMultiSelected = selectedElements.includes(element.id);
 
                   return (
                     <div
                       key={element.id}
                       className={`absolute select-none ${
-                        isSelected ? "ring-2 ring-blue-500 ring-opacity-50" : ""
+                        isSelected || isMultiSelected
+                          ? "ring-2 ring-blue-500 ring-opacity-50"
+                          : ""
                       }`}
                       style={{
                         left: `${element.x}px`,
@@ -642,11 +865,154 @@ const CreateTemplateEditor: React.FC = () => {
                         height: `${element.height}px`,
                         transform: `rotate(${element.rotation}deg)`,
                         zIndex: element.zIndex,
-                        ...(isSelected && {
+                        ...((isSelected || isMultiSelected) && {
                           boxShadow: "0 0 0 2px rgba(59, 130, 246, 0.5)",
                         }),
                       }}
+                      onContextMenu={(e) => handleContextMenu(e, element.id)}
                     >
+                      {element.type === "group" && (
+                        <div
+                          onMouseDown={(e) => handleMouseDown(e, element.id)}
+                          className={`w-full h-full cursor-move bg-transparent ${
+                            isSelected || isMultiSelected
+                              ? "border-2 border-dashed border-blue-500"
+                              : "border-2 border-transparent"
+                          }`}
+                          style={{
+                            position: "relative",
+                          }}
+                        >
+                          {/* Render grouped children */}
+                          {element.children?.map((childId) => {
+                            const childElement = elements.find(
+                              (el) => el.id === childId
+                            );
+                            if (!childElement) return null;
+
+                            return (
+                              <div
+                                key={childId}
+                                className="absolute"
+                                style={{
+                                  left: `${childElement.x}px`,
+                                  top: `${childElement.y}px`,
+                                  width: `${childElement.width}px`,
+                                  height: `${childElement.height}px`,
+                                  transform: `rotate(${childElement.rotation}deg)`,
+                                  pointerEvents: "none", // Prevent individual interaction
+                                }}
+                              >
+                                {childElement.type === "text" && (
+                                  <div
+                                    className="w-full h-full cursor-text transition-all duration-200"
+                                    style={{
+                                      border: "2px solid transparent",
+                                      borderRadius: "8px",
+                                      minHeight: "100%",
+                                      display: "flex",
+                                      alignItems: "center",
+                                      justifyContent:
+                                        childElement.textAlign === "center"
+                                          ? "center"
+                                          : childElement.textAlign === "right"
+                                          ? "flex-end"
+                                          : "flex-start",
+                                      boxSizing: "border-box",
+                                      position: "relative",
+                                    }}
+                                  >
+                                    <div
+                                      className="w-full h-full outline-none transition-all duration-200"
+                                      style={{
+                                        fontSize: `${childElement.fontSize}px`,
+                                        fontFamily: childElement.fontFamily,
+                                        color: childElement.color,
+                                        fontWeight: childElement.fontWeight,
+                                        textAlign: (childElement.textAlign ||
+                                          "left") as
+                                          | "left"
+                                          | "center"
+                                          | "right"
+                                          | "justify",
+                                        wordBreak: "break-word",
+                                        padding: "8px 12px",
+                                        width: "100%",
+                                        minHeight: "100%",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        lineHeight: "1.5",
+                                        boxSizing: "border-box",
+                                        borderRadius: "6px",
+                                        flex: "1",
+                                      }}
+                                    >
+                                      {childElement.content}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {childElement.type === "image" &&
+                                  childElement.src && (
+                                    <div
+                                      className="relative w-full h-full overflow-hidden"
+                                      style={{
+                                        borderRadius: `${
+                                          childElement.borderRadius || 0
+                                        }px`,
+                                      }}
+                                    >
+                                      <Image
+                                        src={childElement.src}
+                                        alt="Grouped element"
+                                        fill
+                                        className="object-cover"
+                                        style={{
+                                          borderRadius: `${
+                                            childElement.borderRadius || 0
+                                          }px`,
+                                        }}
+                                        draggable={false}
+                                        unoptimized
+                                      />
+                                    </div>
+                                  )}
+
+                                {childElement.type === "shape" && (
+                                  <ShapeRenderer
+                                    shapeType={childElement.shapeType || "rect"}
+                                    width={childElement.width}
+                                    height={childElement.height}
+                                    backgroundColor={
+                                      childElement.backgroundColor || "#8b5cf6"
+                                    }
+                                    borderRadius={childElement.borderRadius}
+                                    borderTopLeftRadius={
+                                      childElement.borderTopLeftRadius
+                                    }
+                                    borderTopRightRadius={
+                                      childElement.borderTopRightRadius
+                                    }
+                                    borderBottomLeftRadius={
+                                      childElement.borderBottomLeftRadius
+                                    }
+                                    borderBottomRightRadius={
+                                      childElement.borderBottomRightRadius
+                                    }
+                                    strokeColor={childElement.strokeColor}
+                                    strokeWidth={childElement.strokeWidth}
+                                    strokeStyle={childElement.strokeStyle}
+                                    backgroundImage={childElement.src}
+                                    className="w-full h-full"
+                                  />
+                                )}
+                              </div>
+                            );
+                          })}
+                          {/* Group label removed per user request */}
+                        </div>
+                      )}
+
                       {element.type === "text" && (
                         <>
                           {/* Full-size clickable wrapper */}
@@ -831,63 +1197,112 @@ const CreateTemplateEditor: React.FC = () => {
                       )}
 
                       {/* Resize handles for selected element */}
-                      {isSelected && (
-                        <>
-                          <div
-                            className="absolute -top-1.5 -left-1.5 w-3 h-3 bg-white border-2 border-indigo-500 rounded-sm cursor-nw-resize shadow-sm hover:scale-110 transition-transform"
-                            onMouseDown={(e) =>
-                              handleResizeStart(e, element.id, "nw")
-                            }
-                          ></div>
-                          <div
-                            className="absolute -top-1.5 -right-1.5 w-3 h-3 bg-white border-2 border-indigo-500 rounded-sm cursor-ne-resize shadow-sm hover:scale-110 transition-transform"
-                            onMouseDown={(e) =>
-                              handleResizeStart(e, element.id, "ne")
-                            }
-                          ></div>
-                          <div
-                            className="absolute -bottom-1.5 -left-1.5 w-3 h-3 bg-white border-2 border-indigo-500 rounded-sm cursor-sw-resize shadow-sm hover:scale-110 transition-transform"
-                            onMouseDown={(e) =>
-                              handleResizeStart(e, element.id, "sw")
-                            }
-                          ></div>
-                          <div
-                            className="absolute -bottom-1.5 -right-1.5 w-3 h-3 bg-white border-2 border-indigo-500 rounded-sm cursor-se-resize shadow-sm hover:scale-110 transition-transform"
-                            onMouseDown={(e) =>
-                              handleResizeStart(e, element.id, "se")
-                            }
-                          ></div>
+                      {(isSelected || isMultiSelected) &&
+                        element.type !== "group" && (
+                          <>
+                            <div
+                              className="absolute -top-1.5 -left-1.5 w-3 h-3 bg-white border-2 border-indigo-500 rounded-sm cursor-nw-resize shadow-sm hover:scale-110 transition-transform"
+                              onMouseDown={(e) =>
+                                handleResizeStart(e, element.id, "nw")
+                              }
+                            ></div>
+                            <div
+                              className="absolute -top-1.5 -right-1.5 w-3 h-3 bg-white border-2 border-indigo-500 rounded-sm cursor-ne-resize shadow-sm hover:scale-110 transition-transform"
+                              onMouseDown={(e) =>
+                                handleResizeStart(e, element.id, "ne")
+                              }
+                            ></div>
+                            <div
+                              className="absolute -bottom-1.5 -left-1.5 w-3 h-3 bg-white border-2 border-indigo-500 rounded-sm cursor-sw-resize shadow-sm hover:scale-110 transition-transform"
+                              onMouseDown={(e) =>
+                                handleResizeStart(e, element.id, "sw")
+                              }
+                            ></div>
+                            <div
+                              className="absolute -bottom-1.5 -right-1.5 w-3 h-3 bg-white border-2 border-indigo-500 rounded-sm cursor-se-resize shadow-sm hover:scale-110 transition-transform"
+                              onMouseDown={(e) =>
+                                handleResizeStart(e, element.id, "se")
+                              }
+                            ></div>
 
-                          {/* Edge handles */}
-                          <div
-                            className="absolute -top-1.5 left-1/2 transform -translate-x-1/2 w-3 h-3 bg-white border-2 border-indigo-500 rounded-sm cursor-n-resize shadow-sm hover:scale-110 transition-transform"
-                            onMouseDown={(e) =>
-                              handleResizeStart(e, element.id, "n")
-                            }
-                          ></div>
-                          <div
-                            className="absolute -bottom-1.5 left-1/2 transform -translate-x-1/2 w-3 h-3 bg-white border-2 border-indigo-500 rounded-sm cursor-s-resize shadow-sm hover:scale-110 transition-transform"
-                            onMouseDown={(e) =>
-                              handleResizeStart(e, element.id, "s")
-                            }
-                          ></div>
-                          <div
-                            className="absolute -left-1.5 top-1/2 transform -translate-y-1/2 w-3 h-3 bg-white border-2 border-indigo-500 rounded-sm cursor-w-resize shadow-sm hover:scale-110 transition-transform"
-                            onMouseDown={(e) =>
-                              handleResizeStart(e, element.id, "w")
-                            }
-                          ></div>
-                          <div
-                            className="absolute -right-1.5 top-1/2 transform -translate-y-1/2 w-3 h-3 bg-white border-2 border-indigo-500 rounded-sm cursor-e-resize shadow-sm hover:scale-110 transition-transform"
-                            onMouseDown={(e) =>
-                              handleResizeStart(e, element.id, "e")
-                            }
-                          ></div>
-                        </>
-                      )}
+                            {/* Edge handles */}
+                            <div
+                              className="absolute -top-1.5 left-1/2 transform -translate-x-1/2 w-3 h-3 bg-white border-2 border-indigo-500 rounded-sm cursor-n-resize shadow-sm hover:scale-110 transition-transform"
+                              onMouseDown={(e) =>
+                                handleResizeStart(e, element.id, "n")
+                              }
+                            ></div>
+                            <div
+                              className="absolute -bottom-1.5 left-1/2 transform -translate-x-1/2 w-3 h-3 bg-white border-2 border-indigo-500 rounded-sm cursor-s-resize shadow-sm hover:scale-110 transition-transform"
+                              onMouseDown={(e) =>
+                                handleResizeStart(e, element.id, "s")
+                              }
+                            ></div>
+                            <div
+                              className="absolute -left-1.5 top-1/2 transform -translate-y-1/2 w-3 h-3 bg-white border-2 border-indigo-500 rounded-sm cursor-w-resize shadow-sm hover:scale-110 transition-transform"
+                              onMouseDown={(e) =>
+                                handleResizeStart(e, element.id, "w")
+                              }
+                            ></div>
+                            <div
+                              className="absolute -right-1.5 top-1/2 transform -translate-y-1/2 w-3 h-3 bg-white border-2 border-indigo-500 rounded-sm cursor-e-resize shadow-sm hover:scale-110 transition-transform"
+                              onMouseDown={(e) =>
+                                handleResizeStart(e, element.id, "e")
+                              }
+                            ></div>
+                          </>
+                        )}
                     </div>
                   );
                 })}
+
+              {/* Context Menu */}
+              {contextMenu && (
+                <div
+                  className="fixed bg-white border border-gray-200 rounded-lg shadow-lg py-2 z-50"
+                  style={{
+                    left: `${contextMenu.x}px`,
+                    top: `${contextMenu.y}px`,
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {selectedElements.length >= 2 && (
+                    <button
+                      onClick={() => {
+                        groupElements();
+                        setContextMenu(null);
+                      }}
+                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                    >
+                      Group Elements
+                    </button>
+                  )}
+                  {selectedElement &&
+                    elements.find((el) => el.id === selectedElement)?.type ===
+                      "group" && (
+                      <button
+                        onClick={() => {
+                          ungroupElements();
+                          setContextMenu(null);
+                        }}
+                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                      >
+                        Ungroup Elements
+                      </button>
+                    )}
+                  {(selectedElement || selectedElements.length > 0) && (
+                    <button
+                      onClick={() => {
+                        deleteElement();
+                        setContextMenu(null);
+                      }}
+                      className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                    >
+                      Delete
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
