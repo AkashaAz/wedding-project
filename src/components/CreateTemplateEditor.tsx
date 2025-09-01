@@ -41,6 +41,28 @@ const CreateTemplateEditor: React.FC = () => {
     elementId: null,
   });
 
+  const resizeRef = useRef<{
+    isResizing: boolean;
+    startX: number;
+    startY: number;
+    elementId: string | null;
+    handle: string | null;
+    startWidth: number;
+    startHeight: number;
+    startElementX: number;
+    startElementY: number;
+  }>({
+    isResizing: false,
+    startX: 0,
+    startY: 0,
+    elementId: null,
+    handle: null,
+    startWidth: 0,
+    startHeight: 0,
+    startElementX: 0,
+    startElementY: 0,
+  });
+
   // Add text element
   const addTextElement = useCallback(() => {
     const newElement: ArtboardElement = {
@@ -119,6 +141,186 @@ const CreateTemplateEditor: React.FC = () => {
     }
   }, [selectedElement]);
 
+  // Layer management functions
+  const bringToFront = useCallback(() => {
+    if (!selectedElement) return;
+
+    const maxZ = Math.max(...elements.map((el) => el.zIndex));
+    setElements((prev) =>
+      prev.map((el) =>
+        el.id === selectedElement ? { ...el, zIndex: maxZ + 1 } : el
+      )
+    );
+    setNextZIndex(maxZ + 2);
+  }, [selectedElement, elements]);
+
+  const sendToBack = useCallback(() => {
+    if (!selectedElement) return;
+
+    const minZ = Math.min(...elements.map((el) => el.zIndex));
+    setElements((prev) =>
+      prev.map((el) =>
+        el.id === selectedElement ? { ...el, zIndex: minZ - 1 } : el
+      )
+    );
+  }, [selectedElement, elements]);
+
+  const bringForward = useCallback(() => {
+    if (!selectedElement) return;
+
+    const currentElement = elements.find((el) => el.id === selectedElement);
+    if (!currentElement) return;
+
+    const higherElements = elements.filter(
+      (el) => el.zIndex > currentElement.zIndex
+    );
+    if (higherElements.length === 0) return;
+
+    const nextZ = Math.min(...higherElements.map((el) => el.zIndex));
+    setElements((prev) =>
+      prev.map((el) =>
+        el.id === selectedElement ? { ...el, zIndex: nextZ + 1 } : el
+      )
+    );
+  }, [selectedElement, elements]);
+
+  const sendBackward = useCallback(() => {
+    if (!selectedElement) return;
+
+    const currentElement = elements.find((el) => el.id === selectedElement);
+    if (!currentElement) return;
+
+    const lowerElements = elements.filter(
+      (el) => el.zIndex < currentElement.zIndex
+    );
+    if (lowerElements.length === 0) return;
+
+    const prevZ = Math.max(...lowerElements.map((el) => el.zIndex));
+    setElements((prev) =>
+      prev.map((el) =>
+        el.id === selectedElement ? { ...el, zIndex: prevZ - 1 } : el
+      )
+    );
+  }, [selectedElement, elements]);
+
+  // Handle resize start
+  const handleResizeStart = useCallback(
+    (e: React.MouseEvent, elementId: string, handle: string) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const element = elements.find((el) => el.id === elementId);
+      if (!element) return;
+
+      resizeRef.current = {
+        isResizing: true,
+        startX: e.clientX,
+        startY: e.clientY,
+        elementId,
+        handle,
+        startWidth: element.width,
+        startHeight: element.height,
+        startElementX: element.x,
+        startElementY: element.y,
+      };
+
+      setSelectedElement(elementId);
+    },
+    [elements]
+  );
+
+  // Handle resize move
+  const handleResizeMove = useCallback((e: MouseEvent) => {
+    if (!resizeRef.current.isResizing || !resizeRef.current.elementId) return;
+
+    const deltaX = e.clientX - resizeRef.current.startX;
+    const deltaY = e.clientY - resizeRef.current.startY;
+    const handle = resizeRef.current.handle;
+
+    let newWidth = resizeRef.current.startWidth;
+    let newHeight = resizeRef.current.startHeight;
+    let newX = resizeRef.current.startElementX;
+    let newY = resizeRef.current.startElementY;
+
+    // Calculate new dimensions based on handle
+    switch (handle) {
+      case "se": // Southeast
+        newWidth = Math.max(20, resizeRef.current.startWidth + deltaX);
+        newHeight = Math.max(20, resizeRef.current.startHeight + deltaY);
+        break;
+      case "sw": // Southwest
+        newWidth = Math.max(20, resizeRef.current.startWidth - deltaX);
+        newHeight = Math.max(20, resizeRef.current.startHeight + deltaY);
+        newX = resizeRef.current.startElementX + deltaX;
+        if (newWidth === 20)
+          newX =
+            resizeRef.current.startElementX + resizeRef.current.startWidth - 20;
+        break;
+      case "ne": // Northeast
+        newWidth = Math.max(20, resizeRef.current.startWidth + deltaX);
+        newHeight = Math.max(20, resizeRef.current.startHeight - deltaY);
+        newY = resizeRef.current.startElementY + deltaY;
+        if (newHeight === 20)
+          newY =
+            resizeRef.current.startElementY +
+            resizeRef.current.startHeight -
+            20;
+        break;
+      case "nw": // Northwest
+        newWidth = Math.max(20, resizeRef.current.startWidth - deltaX);
+        newHeight = Math.max(20, resizeRef.current.startHeight - deltaY);
+        newX = resizeRef.current.startElementX + deltaX;
+        newY = resizeRef.current.startElementY + deltaY;
+        if (newWidth === 20)
+          newX =
+            resizeRef.current.startElementX + resizeRef.current.startWidth - 20;
+        if (newHeight === 20)
+          newY =
+            resizeRef.current.startElementY +
+            resizeRef.current.startHeight -
+            20;
+        break;
+      case "e": // East
+        newWidth = Math.max(20, resizeRef.current.startWidth + deltaX);
+        break;
+      case "w": // West
+        newWidth = Math.max(20, resizeRef.current.startWidth - deltaX);
+        newX = resizeRef.current.startElementX + deltaX;
+        if (newWidth === 20)
+          newX =
+            resizeRef.current.startElementX + resizeRef.current.startWidth - 20;
+        break;
+      case "s": // South
+        newHeight = Math.max(20, resizeRef.current.startHeight + deltaY);
+        break;
+      case "n": // North
+        newHeight = Math.max(20, resizeRef.current.startHeight - deltaY);
+        newY = resizeRef.current.startElementY + deltaY;
+        if (newHeight === 20)
+          newY =
+            resizeRef.current.startElementY +
+            resizeRef.current.startHeight -
+            20;
+        break;
+    }
+
+    // Update element
+    setElements((prev) =>
+      prev.map((el) =>
+        el.id === resizeRef.current.elementId
+          ? { ...el, width: newWidth, height: newHeight, x: newX, y: newY }
+          : el
+      )
+    );
+  }, []);
+
+  // Handle resize end
+  const handleResizeEnd = useCallback(() => {
+    resizeRef.current.isResizing = false;
+    resizeRef.current.elementId = null;
+    resizeRef.current.handle = null;
+  }, []);
+
   // Export to JSON
   const exportJSON = useCallback(() => {
     const schema = {
@@ -187,12 +389,10 @@ const CreateTemplateEditor: React.FC = () => {
           elementId,
         };
 
-        // Bring to front
-        updateElementContent(elementId, { zIndex: nextZIndex });
-        setNextZIndex((prev) => prev + 1);
+        // Don't automatically bring to front - let user control layers manually
       }
     },
-    [elements, nextZIndex, updateElementContent]
+    [elements]
   );
 
   const handleMouseMove = useCallback(
@@ -241,12 +441,16 @@ const CreateTemplateEditor: React.FC = () => {
   useEffect(() => {
     document.addEventListener("mousemove", handleMouseMove);
     document.addEventListener("mouseup", handleMouseUp);
+    document.addEventListener("mousemove", handleResizeMove);
+    document.addEventListener("mouseup", handleResizeEnd);
 
     return () => {
       document.removeEventListener("mousemove", handleMouseMove);
       document.removeEventListener("mouseup", handleMouseUp);
+      document.removeEventListener("mousemove", handleResizeMove);
+      document.removeEventListener("mouseup", handleResizeEnd);
     };
-  }, [handleMouseMove, handleMouseUp]);
+  }, [handleMouseMove, handleMouseUp, handleResizeMove, handleResizeEnd]);
 
   // Handle keyboard events
   useEffect(() => {
@@ -297,6 +501,43 @@ const CreateTemplateEditor: React.FC = () => {
           >
             Delete
           </button>
+
+          {/* Layer Management Buttons */}
+          {selectedElement && (
+            <>
+              <div className="border-l border-gray-300 h-8 mx-2"></div>
+              <div className="flex gap-2">
+                <button
+                  onClick={bringToFront}
+                  className="px-3 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors text-sm"
+                  title="Bring to Front"
+                >
+                  ⬆️ Front
+                </button>
+                <button
+                  onClick={bringForward}
+                  className="px-3 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors text-sm"
+                  title="Bring Forward"
+                >
+                  ↑ Forward
+                </button>
+                <button
+                  onClick={sendBackward}
+                  className="px-3 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors text-sm"
+                  title="Send Backward"
+                >
+                  ↓ Backward
+                </button>
+                <button
+                  onClick={sendToBack}
+                  className="px-3 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors text-sm"
+                  title="Send to Back"
+                >
+                  ⬇️ Back
+                </button>
+              </div>
+            </>
+          )}
           <div className="border-l border-gray-300 h-8 mx-2"></div>
           <button
             onClick={exportJSON}
@@ -327,211 +568,254 @@ const CreateTemplateEditor: React.FC = () => {
                 cursor: "default",
               }}
             >
-              {elements.map((element) => {
-                const isSelected = selectedElement === element.id;
+              {elements
+                .sort((a, b) => a.zIndex - b.zIndex) // Sort by zIndex for proper layering
+                .map((element) => {
+                  const isSelected = selectedElement === element.id;
 
-                return (
-                  <div
-                    key={element.id}
-                    className={`absolute select-none ${
-                      isSelected ? "ring-2 ring-blue-500 ring-opacity-50" : ""
-                    }`}
-                    style={{
-                      left: `${element.x}px`,
-                      top: `${element.y}px`,
-                      width: `${element.width}px`,
-                      height: `${element.height}px`,
-                      transform: `rotate(${element.rotation}deg)`,
-                      zIndex: element.zIndex,
-                      ...(isSelected && {
-                        boxShadow: "0 0 0 2px rgba(59, 130, 246, 0.5)",
-                      }),
-                    }}
-                  >
-                    {element.type === "text" && (
-                      <>
-                        {/* Full-size clickable wrapper */}
-                        <div
-                          onMouseDown={(e) => {
-                            e.stopPropagation();
-                            setSelectedElement(element.id);
-
-                            // Start drag tracking
-                            dragRef.current = {
-                              isDragging: false,
-                              startX: e.clientX,
-                              startY: e.clientY,
-                              elementId: element.id,
-                            };
-                          }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedElement(element.id);
-                            // Focus on content editable for editing
-                            if (!dragRef.current.isDragging) {
-                              const textContent = e.currentTarget.querySelector(
-                                "[contenteditable]"
-                              ) as HTMLDivElement;
-                              if (textContent) {
-                                textContent.focus();
-                              }
-                            }
-                          }}
-                          className="w-full h-full cursor-text transition-all duration-200 group hover:bg-slate-50"
-                          style={{
-                            border: isSelected
-                              ? "2px solid rgba(99, 102, 241, 0.4)"
-                              : "2px solid transparent",
-                            backgroundColor: isSelected
-                              ? "rgba(99, 102, 241, 0.03)"
-                              : "transparent",
-                            borderRadius: "8px",
-                            minHeight: "100%",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent:
-                              element.textAlign === "center"
-                                ? "center"
-                                : element.textAlign === "right"
-                                ? "flex-end"
-                                : "flex-start",
-                            boxSizing: "border-box",
-                            position: "relative",
-                            ...(isSelected && {
-                              boxShadow:
-                                "0 0 0 4px rgba(99, 102, 241, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04)",
-                            }),
-                          }}
-                        >
-                          {/* Placeholder text */}
-                          {!element.content && !isSelected && (
-                            <div
-                              className="absolute inset-0 flex items-center justify-center text-gray-400 text-sm italic pointer-events-none"
-                              style={{
-                                fontSize: `${Math.max(
-                                  (element.fontSize || 16) * 0.8,
-                                  12
-                                )}px`,
-                                fontFamily: element.fontFamily,
-                              }}
-                            >
-                              Click to edit text
-                            </div>
-                          )}
+                  return (
+                    <div
+                      key={element.id}
+                      className={`absolute select-none ${
+                        isSelected ? "ring-2 ring-blue-500 ring-opacity-50" : ""
+                      }`}
+                      style={{
+                        left: `${element.x}px`,
+                        top: `${element.y}px`,
+                        width: `${element.width}px`,
+                        height: `${element.height}px`,
+                        transform: `rotate(${element.rotation}deg)`,
+                        zIndex: element.zIndex,
+                        ...(isSelected && {
+                          boxShadow: "0 0 0 2px rgba(59, 130, 246, 0.5)",
+                        }),
+                      }}
+                    >
+                      {element.type === "text" && (
+                        <>
+                          {/* Full-size clickable wrapper */}
                           <div
-                            contentEditable
-                            suppressContentEditableWarning
+                            onMouseDown={(e) => {
+                              e.stopPropagation();
+                              setSelectedElement(element.id);
+
+                              // Start drag tracking
+                              dragRef.current = {
+                                isDragging: false,
+                                startX: e.clientX,
+                                startY: e.clientY,
+                                elementId: element.id,
+                              };
+                            }}
                             onClick={(e) => {
                               e.stopPropagation();
                               setSelectedElement(element.id);
-                              // Focus immediately for editing
-                              const target = e.target as HTMLDivElement;
-                              if (target && !dragRef.current.isDragging) {
-                                target.focus();
+                              // Focus on content editable for editing
+                              if (!dragRef.current.isDragging) {
+                                const textContent =
+                                  e.currentTarget.querySelector(
+                                    "[contenteditable]"
+                                  ) as HTMLDivElement;
+                                if (textContent) {
+                                  textContent.focus();
+                                }
                               }
                             }}
-                            onBlur={(e) =>
-                              updateElementContent(element.id, {
-                                content: e.target.textContent || "",
-                              })
-                            }
-                            onFocus={(e) => {
-                              e.stopPropagation();
-                              setSelectedElement(element.id);
-                            }}
-                            onDoubleClick={(e) => {
-                              e.stopPropagation();
-                              const target = e.target as HTMLDivElement;
-                              target.focus();
-                              // Select all text on double click
-                              const range = document.createRange();
-                              range.selectNodeContents(target);
-                              const selection = window.getSelection();
-                              selection?.removeAllRanges();
-                              selection?.addRange(range);
-                            }}
-                            className="w-full h-full outline-none cursor-text transition-all duration-200 focus:bg-white focus:shadow-sm"
+                            className="w-full h-full cursor-text transition-all duration-200 group hover:bg-slate-50"
                             style={{
-                              fontSize: `${element.fontSize}px`,
-                              fontFamily: element.fontFamily,
-                              color: element.color,
-                              fontWeight: element.fontWeight,
-                              textAlign: (element.textAlign || "left") as
-                                | "left"
-                                | "center"
-                                | "right"
-                                | "justify",
-                              wordBreak: "break-word",
-                              padding: "8px 12px",
-                              width: "100%",
+                              border: isSelected
+                                ? "2px solid rgba(99, 102, 241, 0.4)"
+                                : "2px solid transparent",
+                              backgroundColor: isSelected
+                                ? "rgba(99, 102, 241, 0.03)"
+                                : "transparent",
+                              borderRadius: "8px",
                               minHeight: "100%",
                               display: "flex",
                               alignItems: "center",
-                              lineHeight: "1.5",
+                              justifyContent:
+                                element.textAlign === "center"
+                                  ? "center"
+                                  : element.textAlign === "right"
+                                  ? "flex-end"
+                                  : "flex-start",
                               boxSizing: "border-box",
-                              borderRadius: "6px",
-                              backgroundColor: "transparent",
-                              transition: "all 0.2s ease",
-                              flex: "1",
+                              position: "relative",
+                              ...(isSelected && {
+                                boxShadow:
+                                  "0 0 0 4px rgba(99, 102, 241, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04)",
+                              }),
                             }}
                           >
-                            {element.content}
+                            {/* Placeholder text */}
+                            {!element.content && !isSelected && (
+                              <div
+                                className="absolute inset-0 flex items-center justify-center text-gray-400 text-sm italic pointer-events-none"
+                                style={{
+                                  fontSize: `${Math.max(
+                                    (element.fontSize || 16) * 0.8,
+                                    12
+                                  )}px`,
+                                  fontFamily: element.fontFamily,
+                                }}
+                              >
+                                Click to edit text
+                              </div>
+                            )}
+                            <div
+                              contentEditable
+                              suppressContentEditableWarning
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedElement(element.id);
+                                // Focus immediately for editing
+                                const target = e.target as HTMLDivElement;
+                                if (target && !dragRef.current.isDragging) {
+                                  target.focus();
+                                }
+                              }}
+                              onBlur={(e) =>
+                                updateElementContent(element.id, {
+                                  content: e.target.textContent || "",
+                                })
+                              }
+                              onFocus={(e) => {
+                                e.stopPropagation();
+                                setSelectedElement(element.id);
+                              }}
+                              onDoubleClick={(e) => {
+                                e.stopPropagation();
+                                const target = e.target as HTMLDivElement;
+                                target.focus();
+                                // Select all text on double click
+                                const range = document.createRange();
+                                range.selectNodeContents(target);
+                                const selection = window.getSelection();
+                                selection?.removeAllRanges();
+                                selection?.addRange(range);
+                              }}
+                              className="w-full h-full outline-none cursor-text transition-all duration-200 focus:bg-white focus:shadow-sm"
+                              style={{
+                                fontSize: `${element.fontSize}px`,
+                                fontFamily: element.fontFamily,
+                                color: element.color,
+                                fontWeight: element.fontWeight,
+                                textAlign: (element.textAlign || "left") as
+                                  | "left"
+                                  | "center"
+                                  | "right"
+                                  | "justify",
+                                wordBreak: "break-word",
+                                padding: "8px 12px",
+                                width: "100%",
+                                minHeight: "100%",
+                                display: "flex",
+                                alignItems: "center",
+                                lineHeight: "1.5",
+                                boxSizing: "border-box",
+                                borderRadius: "6px",
+                                backgroundColor: "transparent",
+                                transition: "all 0.2s ease",
+                                flex: "1",
+                              }}
+                            >
+                              {element.content}
+                            </div>
                           </div>
-                        </div>
-                      </>
-                    )}
+                        </>
+                      )}
 
-                    {element.type === "image" && element.src && (
-                      <div
-                        onMouseDown={(e) => handleMouseDown(e, element.id)}
-                        className="relative w-full h-full overflow-hidden cursor-move"
-                        style={{
-                          borderRadius: `${element.borderRadius || 0}px`,
-                        }}
-                      >
-                        <Image
-                          src={element.src}
-                          alt="Artboard element"
-                          fill
-                          className="object-cover"
+                      {element.type === "image" && element.src && (
+                        <div
+                          onMouseDown={(e) => handleMouseDown(e, element.id)}
+                          className="relative w-full h-full overflow-hidden cursor-move"
                           style={{
                             borderRadius: `${element.borderRadius || 0}px`,
                           }}
-                          draggable={false}
-                          unoptimized // Allow data URLs
+                        >
+                          <Image
+                            src={element.src}
+                            alt="Artboard element"
+                            fill
+                            className="object-cover"
+                            style={{
+                              borderRadius: `${element.borderRadius || 0}px`,
+                            }}
+                            draggable={false}
+                            unoptimized // Allow data URLs
+                          />
+                        </div>
+                      )}
+
+                      {element.type === "shape" && (
+                        <div
+                          onMouseDown={(e) => handleMouseDown(e, element.id)}
+                          className="w-full h-full cursor-move"
+                          style={{
+                            backgroundColor: element.backgroundColor,
+                            borderRadius: `${element.borderRadius || 0}px`,
+                          }}
                         />
-                      </div>
-                    )}
+                      )}
 
-                    {element.type === "shape" && (
-                      <div
-                        onMouseDown={(e) => handleMouseDown(e, element.id)}
-                        className="w-full h-full cursor-move"
-                        style={{
-                          backgroundColor: element.backgroundColor,
-                          borderRadius: `${element.borderRadius || 0}px`,
-                        }}
-                      />
-                    )}
+                      {/* Resize handles for selected element */}
+                      {isSelected && (
+                        <>
+                          <div
+                            className="absolute -top-1.5 -left-1.5 w-3 h-3 bg-white border-2 border-indigo-500 rounded-sm cursor-nw-resize shadow-sm hover:scale-110 transition-transform"
+                            onMouseDown={(e) =>
+                              handleResizeStart(e, element.id, "nw")
+                            }
+                          ></div>
+                          <div
+                            className="absolute -top-1.5 -right-1.5 w-3 h-3 bg-white border-2 border-indigo-500 rounded-sm cursor-ne-resize shadow-sm hover:scale-110 transition-transform"
+                            onMouseDown={(e) =>
+                              handleResizeStart(e, element.id, "ne")
+                            }
+                          ></div>
+                          <div
+                            className="absolute -bottom-1.5 -left-1.5 w-3 h-3 bg-white border-2 border-indigo-500 rounded-sm cursor-sw-resize shadow-sm hover:scale-110 transition-transform"
+                            onMouseDown={(e) =>
+                              handleResizeStart(e, element.id, "sw")
+                            }
+                          ></div>
+                          <div
+                            className="absolute -bottom-1.5 -right-1.5 w-3 h-3 bg-white border-2 border-indigo-500 rounded-sm cursor-se-resize shadow-sm hover:scale-110 transition-transform"
+                            onMouseDown={(e) =>
+                              handleResizeStart(e, element.id, "se")
+                            }
+                          ></div>
 
-                    {/* Resize handles for selected element */}
-                    {isSelected && (
-                      <>
-                        <div className="absolute -top-1.5 -left-1.5 w-3 h-3 bg-white border-2 border-indigo-500 rounded-sm cursor-nw-resize shadow-sm hover:scale-110 transition-transform"></div>
-                        <div className="absolute -top-1.5 -right-1.5 w-3 h-3 bg-white border-2 border-indigo-500 rounded-sm cursor-ne-resize shadow-sm hover:scale-110 transition-transform"></div>
-                        <div className="absolute -bottom-1.5 -left-1.5 w-3 h-3 bg-white border-2 border-indigo-500 rounded-sm cursor-sw-resize shadow-sm hover:scale-110 transition-transform"></div>
-                        <div className="absolute -bottom-1.5 -right-1.5 w-3 h-3 bg-white border-2 border-indigo-500 rounded-sm cursor-se-resize shadow-sm hover:scale-110 transition-transform"></div>
-
-                        {/* Edge handles */}
-                        <div className="absolute -top-1.5 left-1/2 transform -translate-x-1/2 w-3 h-3 bg-white border-2 border-indigo-500 rounded-sm cursor-n-resize shadow-sm hover:scale-110 transition-transform"></div>
-                        <div className="absolute -bottom-1.5 left-1/2 transform -translate-x-1/2 w-3 h-3 bg-white border-2 border-indigo-500 rounded-sm cursor-s-resize shadow-sm hover:scale-110 transition-transform"></div>
-                        <div className="absolute -left-1.5 top-1/2 transform -translate-y-1/2 w-3 h-3 bg-white border-2 border-indigo-500 rounded-sm cursor-w-resize shadow-sm hover:scale-110 transition-transform"></div>
-                        <div className="absolute -right-1.5 top-1/2 transform -translate-y-1/2 w-3 h-3 bg-white border-2 border-indigo-500 rounded-sm cursor-e-resize shadow-sm hover:scale-110 transition-transform"></div>
-                      </>
-                    )}
-                  </div>
-                );
-              })}
+                          {/* Edge handles */}
+                          <div
+                            className="absolute -top-1.5 left-1/2 transform -translate-x-1/2 w-3 h-3 bg-white border-2 border-indigo-500 rounded-sm cursor-n-resize shadow-sm hover:scale-110 transition-transform"
+                            onMouseDown={(e) =>
+                              handleResizeStart(e, element.id, "n")
+                            }
+                          ></div>
+                          <div
+                            className="absolute -bottom-1.5 left-1/2 transform -translate-x-1/2 w-3 h-3 bg-white border-2 border-indigo-500 rounded-sm cursor-s-resize shadow-sm hover:scale-110 transition-transform"
+                            onMouseDown={(e) =>
+                              handleResizeStart(e, element.id, "s")
+                            }
+                          ></div>
+                          <div
+                            className="absolute -left-1.5 top-1/2 transform -translate-y-1/2 w-3 h-3 bg-white border-2 border-indigo-500 rounded-sm cursor-w-resize shadow-sm hover:scale-110 transition-transform"
+                            onMouseDown={(e) =>
+                              handleResizeStart(e, element.id, "w")
+                            }
+                          ></div>
+                          <div
+                            className="absolute -right-1.5 top-1/2 transform -translate-y-1/2 w-3 h-3 bg-white border-2 border-indigo-500 rounded-sm cursor-e-resize shadow-sm hover:scale-110 transition-transform"
+                            onMouseDown={(e) =>
+                              handleResizeStart(e, element.id, "e")
+                            }
+                          ></div>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
             </div>
           </div>
         </div>
@@ -873,6 +1157,42 @@ const CreateTemplateEditor: React.FC = () => {
                         />
                       </div>
                     )}
+
+                    {/* Layer Management Section */}
+                    <div className="bg-indigo-50 rounded-lg p-4">
+                      <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-3">
+                        Layer Order
+                        <span className="text-xs text-gray-500 bg-white px-2 py-1 rounded">
+                          Z: {element.zIndex}
+                        </span>
+                      </label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          onClick={bringToFront}
+                          className="px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm"
+                        >
+                          ⬆️ To Front
+                        </button>
+                        <button
+                          onClick={sendToBack}
+                          className="px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm"
+                        >
+                          ⬇️ To Back
+                        </button>
+                        <button
+                          onClick={bringForward}
+                          className="px-3 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors text-sm"
+                        >
+                          ↑ Forward
+                        </button>
+                        <button
+                          onClick={sendBackward}
+                          className="px-3 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors text-sm"
+                        >
+                          ↓ Backward
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 );
               })()}
