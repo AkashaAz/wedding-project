@@ -58,6 +58,7 @@ const CreateTemplateEditor: React.FC = () => {
     null
   ); // Context menu
   const [nextZIndex, setNextZIndex] = useState(1);
+  const [showLayoutPanel, setShowLayoutPanel] = useState(false); // Layout panel toggle
   const artboardRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{
     isDragging: boolean;
@@ -673,6 +674,21 @@ const CreateTemplateEditor: React.FC = () => {
         setSelectedElement(null);
         setSelectedElements([]);
         setContextMenu(null);
+        setShowLayoutPanel(false);
+      }
+      if (e.key === "l" || e.key === "L") {
+        if (!e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+          // Check if not typing in an input field
+          const activeElement = document.activeElement;
+          if (
+            activeElement?.tagName !== "INPUT" &&
+            activeElement?.tagName !== "TEXTAREA" &&
+            !activeElement?.hasAttribute("contenteditable")
+          ) {
+            e.preventDefault();
+            setShowLayoutPanel((prev) => !prev);
+          }
+        }
       }
     };
 
@@ -1865,6 +1881,24 @@ const CreateTemplateEditor: React.FC = () => {
           <div className="flex items-center px-3 py-2 gap-1">
             {/* Main Tools Group */}
             <div className="flex items-center bg-gray-50 rounded-lg p-1">
+              {/* Layout Templates Button */}
+              <button
+                onClick={() => setShowLayoutPanel(!showLayoutPanel)}
+                className="flex items-center justify-center w-8 h-8 text-gray-600 hover:bg-white hover:text-gray-900 rounded transition-all duration-150 relative group"
+                title="Layout Templates (L)"
+              >
+                <svg
+                  className="w-4 h-4"
+                  fill="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path d="M3 3h8v8H3zm10 0h8v8h-8zM3 13h8v8H3zm10 0h8v8h-8z" />
+                </svg>
+                <div className="absolute bottom-full mb-2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                  Layout Templates (L)
+                </div>
+              </button>
+
               <button
                 onClick={addTextElement}
                 className="flex items-center justify-center w-8 h-8 text-gray-600 hover:bg-white hover:text-gray-900 rounded transition-all duration-150 relative group"
@@ -2041,6 +2075,100 @@ const CreateTemplateEditor: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Layout Templates Panel */}
+      {showLayoutPanel && (
+        <div className="fixed top-20 left-6 z-40 w-80 bg-white rounded-lg shadow-xl border border-gray-200">
+          <div className="p-4 border-b border-gray-200">
+            <div className="flex justify-between items-center">
+              <h3 className="text-lg font-semibold">Layout Templates</h3>
+              <button
+                onClick={() => setShowLayoutPanel(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <svg
+                  className="w-5 h-5"
+                  fill="currentColor"
+                  viewBox="0 0 20 20"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <div className="p-4 max-h-96 overflow-y-auto">
+            <div className="space-y-3">
+              {/* Hero Layout */}
+              <div className="border border-gray-200 rounded-lg p-3 hover:border-blue-300 cursor-pointer transition-colors">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-10 h-6 bg-gradient-to-r from-blue-400 to-purple-500 rounded"></div>
+                  <div>
+                    <h4 className="font-medium text-sm">Hero Section</h4>
+                    <p className="text-xs text-gray-500">
+                      Large header with image and text
+                    </p>
+                  </div>
+                </div>
+                <div className="bg-gray-50 rounded p-2 text-xs text-gray-600">
+                  Click to add a responsive hero section with image, title,
+                  subtitle and button
+                </div>
+              </div>
+
+              {/* Info Cards Layout */}
+              <div className="border border-gray-200 rounded-lg p-3 hover:border-blue-300 cursor-pointer transition-colors">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-10 h-6 bg-gradient-to-r from-green-400 to-blue-500 rounded"></div>
+                  <div>
+                    <h4 className="font-medium text-sm">Info Cards</h4>
+                    <p className="text-xs text-gray-500">
+                      Information cards with icons
+                    </p>
+                  </div>
+                </div>
+                <div className="bg-gray-50 rounded p-2 text-xs text-gray-600">
+                  Add information cards with images, icons and descriptions
+                </div>
+              </div>
+
+              {/* Gallery Layout */}
+              <div className="border border-gray-200 rounded-lg p-3 hover:border-blue-300 cursor-pointer transition-colors">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-10 h-6 bg-gradient-to-r from-purple-400 to-pink-500 rounded"></div>
+                  <div>
+                    <h4 className="font-medium text-sm">Gallery Grid</h4>
+                    <p className="text-xs text-gray-500">
+                      Photo gallery in grid layout
+                    </p>
+                  </div>
+                </div>
+                <div className="bg-gray-50 rounded p-2 text-xs text-gray-600">
+                  Create a responsive image gallery with customizable grid
+                  columns
+                </div>
+              </div>
+
+              {/* Quick Access to Preview Page */}
+              <div className="border-t border-gray-200 pt-3 mt-4">
+                <a
+                  href="/preview"
+                  className="block w-full bg-blue-600 text-white text-center py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                >
+                  Open Advanced Layout Editor
+                </a>
+                <p className="text-xs text-gray-500 mt-2 text-center">
+                  For more layout options and drag & drop functionality
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
