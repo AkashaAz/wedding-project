@@ -5,6 +5,7 @@ import HeroCard from "../../components/Layout/HeroCard";
 import InfoCard from "../../components/Layout/InfoCard";
 import GalleryCard from "../../components/Layout/GalleryCard";
 import { FullScreenHero } from "../../components/Layout/FullScreenHero";
+import { WeddingInvitation } from "../../components/Layout/WeddingInvitation";
 
 // Types for layout components
 interface LayoutComponent {
@@ -42,6 +43,7 @@ interface LayoutDefinition {
 }
 
 const COMPONENT_MAP = {
+  WeddingInvitation,
   FullScreenHero,
   HeroCard,
   InfoCard,
@@ -358,7 +360,7 @@ export default function PreviewPage() {
 
     const imports = uniqueComponents
       .map((compName) => {
-        if (compName === "FullScreenHero") {
+        if (compName === "FullScreenHero" || compName === "WeddingInvitation") {
           return `import { ${compName} } from "@/components/Layout/${compName}";`;
         }
         return `import ${compName} from "@/components/Layout/${compName}";`;
