@@ -109,59 +109,50 @@ const ShapeSelector: React.FC<ShapeSelectorProps> = ({ onShapeSelect }) => {
 
   return (
     <div className="relative" ref={dropdownRef}>
-      {/* Main Button */}
+      {/* Figma-style Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-600 transition-colors flex items-center gap-2 min-w-[120px] justify-between"
+        className="flex items-center justify-center w-8 h-8 text-gray-600 hover:bg-white hover:text-gray-900 rounded transition-all duration-150 relative group"
+        title="Add Shape (S)"
       >
-        <div className="flex items-center gap-2">
-          {selectedShape.preview}
-          <span className="hidden sm:inline">Add Shape</span>
+        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+        </svg>
+        <div className="absolute bottom-full mb-2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+          Add Shape (S)
         </div>
+        {/* Small dropdown arrow */}
         <svg
-          className={`w-4 h-4 transition-transform ${
+          className={`w-2 h-2 absolute -bottom-0.5 -right-0.5 text-gray-400 transition-transform ${
             isOpen ? "rotate-180" : ""
           }`}
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
+          fill="currentColor"
+          viewBox="0 0 12 12"
         >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M19 9l-7 7-7-7"
-          />
+          <path d="M2 4l4 4 4-4H2z" />
         </svg>
       </button>
 
       {/* Dropdown */}
       {isOpen && (
-        <div className="absolute top-full left-0 mt-2 w-56 bg-white border border-gray-200 rounded-lg shadow-xl z-50 overflow-hidden">
-          <div className="p-2">
-            <div className="text-sm font-medium text-gray-700 mb-2 px-2">
-              Choose a shape:
-            </div>
-            <div className="space-y-1">
-              {SHAPE_TYPES.map((shape) => (
-                <button
-                  key={shape.id}
-                  onClick={() => handleShapeSelect(shape)}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-md hover:bg-gray-50 transition-colors text-left ${
-                    selectedShape.id === shape.id
-                      ? "bg-purple-50 border border-purple-200"
-                      : ""
-                  }`}
-                >
-                  <div className="flex-shrink-0 flex items-center justify-center w-8 h-8 bg-white border border-gray-200 rounded">
-                    {shape.preview}
-                  </div>
-                  <span className="text-sm font-medium text-gray-700">
-                    {shape.name}
-                  </span>
-                </button>
-              ))}
-            </div>
+        <div className="absolute bottom-full left-0 mb-2 w-48 bg-white border border-gray-200 rounded-lg shadow-xl z-50 overflow-hidden">
+          <div className="p-1">
+            {SHAPE_TYPES.map((shape) => (
+              <button
+                key={shape.id}
+                onClick={() => handleShapeSelect(shape)}
+                className={`w-full flex items-center gap-3 px-3 py-2 rounded-md hover:bg-gray-50 transition-colors text-left ${
+                  selectedShape.id === shape.id
+                    ? "bg-blue-50 text-blue-700"
+                    : "text-gray-700"
+                }`}
+              >
+                <div className="flex-shrink-0 flex items-center justify-center w-6 h-6">
+                  {shape.preview}
+                </div>
+                <span className="text-sm font-medium">{shape.name}</span>
+              </button>
+            ))}
           </div>
         </div>
       )}

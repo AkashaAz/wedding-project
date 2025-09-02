@@ -721,1223 +721,1324 @@ const CreateTemplateEditor: React.FC = () => {
   }, []);
 
   return (
-    <div className="w-full max-w-7xl mx-auto p-6">
-      {/* Toolbar */}
-      <div className="mb-6 bg-white rounded-lg shadow-md p-4 relative">
-        <div className="flex flex-wrap gap-4 items-center">
-          <button
-            onClick={addTextElement}
-            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
-          >
-            Add Text
-          </button>
-          <button
-            onClick={addImageElement}
-            className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition-colors"
-          >
-            Add Image
-          </button>
-          <ShapeSelector onShapeSelect={addShapeElement} />
-
-          {/* Group/Ungroup buttons */}
-          {selectedElements.length >= 2 && (
-            <button
-              onClick={groupElements}
-              className="px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-600 transition-colors"
-            >
-              Group
-            </button>
-          )}
-          {selectedElement &&
-            elements.find((el) => el.id === selectedElement)?.type ===
-              "group" && (
-              <button
-                onClick={ungroupElements}
-                className="px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-600 transition-colors"
+    <div className="w-full min-h-screen bg-gray-50">
+      {/* Main Content - Full screen without top margin */}
+      <div className="px-6 py-6">
+        <div className="flex gap-6">
+          {/* Artboard - ชิดซ้าย */}
+          <div className="flex-none">
+            <div className="bg-white rounded-lg shadow-lg p-6">
+              <div
+                ref={artboardRef}
+                onClick={handleArtboardClick}
+                onContextMenu={(e) => handleContextMenu(e)}
+                className="relative bg-white border-2 border-gray-200 mx-auto overflow-hidden"
+                style={{
+                  width: "800px",
+                  height: "600px",
+                  cursor: "default",
+                }}
               >
-                Ungroup
-              </button>
-            )}
+                {elements
+                  .filter((el) => !el.parentId) // Only render top-level elements (groups and ungrouped elements)
+                  .sort((a, b) => a.zIndex - b.zIndex) // Sort by zIndex for proper layering
+                  .map((element) => {
+                    const isSelected = selectedElement === element.id;
+                    const isMultiSelected = selectedElements.includes(
+                      element.id
+                    );
 
-          <button
-            onClick={deleteElement}
-            disabled={!selectedElement && selectedElements.length === 0}
-            className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
-          >
-            Delete
-          </button>
+                    return (
+                      <div
+                        key={element.id}
+                        className={`absolute select-none ${
+                          isSelected || isMultiSelected
+                            ? "ring-2 ring-blue-500 ring-opacity-50"
+                            : ""
+                        }`}
+                        style={{
+                          left: `${element.x}px`,
+                          top: `${element.y}px`,
+                          width: `${element.width}px`,
+                          height: `${element.height}px`,
+                          transform: `rotate(${element.rotation}deg)`,
+                          zIndex: element.zIndex,
+                          ...((isSelected || isMultiSelected) && {
+                            boxShadow: "0 0 0 2px rgba(59, 130, 246, 0.5)",
+                          }),
+                        }}
+                        onContextMenu={(e) => handleContextMenu(e, element.id)}
+                      >
+                        {element.type === "group" && (
+                          <div
+                            onMouseDown={(e) => handleMouseDown(e, element.id)}
+                            className={`w-full h-full cursor-move bg-transparent ${
+                              isSelected || isMultiSelected
+                                ? "border-2 border-dashed border-blue-500"
+                                : "border-2 border-transparent"
+                            }`}
+                            style={{
+                              position: "relative",
+                            }}
+                          >
+                            {/* Render grouped children */}
+                            {element.children?.map((childId) => {
+                              const childElement = elements.find(
+                                (el) => el.id === childId
+                              );
+                              if (!childElement) return null;
 
-          {/* Layer Management Buttons */}
-          {selectedElement && (
-            <>
-              <div className="border-l border-gray-300 h-8 mx-2"></div>
-              <div className="flex gap-1">
-                <button
-                  onClick={bringToFront}
-                  className="px-2 py-1.5 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors text-xs"
-                  title="Bring to Front"
-                >
-                  ⬆️ Front
-                </button>
-                <button
-                  onClick={bringForward}
-                  className="px-2 py-1.5 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors text-xs"
-                  title="Bring Forward"
-                >
-                  ↑ Forward
-                </button>
-                <button
-                  onClick={sendBackward}
-                  className="px-2 py-1.5 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors text-xs"
-                  title="Send Backward"
-                >
-                  ↓ Backward
-                </button>
-                <button
-                  onClick={sendToBack}
-                  className="px-2 py-1.5 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors text-xs"
-                  title="Send to Back"
-                >
-                  ⬇️ Back
-                </button>
-              </div>
-            </>
-          )}
-          <div className="border-l border-gray-300 h-8 mx-2"></div>
-          <button
-            onClick={exportJSON}
-            className="px-4 py-2 bg-indigo-500 text-white rounded hover:bg-indigo-600 transition-colors"
-          >
-            Export JSON
-          </button>
-          <button
-            onClick={importJSON}
-            className="px-4 py-2 bg-orange-500 text-white rounded hover:bg-orange-600 transition-colors"
-          >
-            Import JSON
-          </button>
-        </div>
-
-        {/* Multi-selection info - Fixed position overlay */}
-        {selectedElements.length > 0 && (
-          <div className="absolute top-full left-0 right-0 z-10 text-sm text-white bg-blue-600 px-3 py-2 shadow-lg">
-            {selectedElements.length} element
-            {selectedElements.length > 1 ? "s" : ""} selected. Hold Shift and
-            click to select multiple elements. Right-click for group options.
-          </div>
-        )}
-      </div>
-
-      <div className="flex gap-6">
-        {/* Artboard - ชิดซ้าย */}
-        <div className="flex-none">
-          <div className="bg-white rounded-lg shadow-lg p-6">
-            <div
-              ref={artboardRef}
-              onClick={handleArtboardClick}
-              onContextMenu={(e) => handleContextMenu(e)}
-              className="relative bg-white border-2 border-gray-200 mx-auto overflow-hidden"
-              style={{
-                width: "800px",
-                height: "600px",
-                cursor: "default",
-              }}
-            >
-              {elements
-                .filter((el) => !el.parentId) // Only render top-level elements (groups and ungrouped elements)
-                .sort((a, b) => a.zIndex - b.zIndex) // Sort by zIndex for proper layering
-                .map((element) => {
-                  const isSelected = selectedElement === element.id;
-                  const isMultiSelected = selectedElements.includes(element.id);
-
-                  return (
-                    <div
-                      key={element.id}
-                      className={`absolute select-none ${
-                        isSelected || isMultiSelected
-                          ? "ring-2 ring-blue-500 ring-opacity-50"
-                          : ""
-                      }`}
-                      style={{
-                        left: `${element.x}px`,
-                        top: `${element.y}px`,
-                        width: `${element.width}px`,
-                        height: `${element.height}px`,
-                        transform: `rotate(${element.rotation}deg)`,
-                        zIndex: element.zIndex,
-                        ...((isSelected || isMultiSelected) && {
-                          boxShadow: "0 0 0 2px rgba(59, 130, 246, 0.5)",
-                        }),
-                      }}
-                      onContextMenu={(e) => handleContextMenu(e, element.id)}
-                    >
-                      {element.type === "group" && (
-                        <div
-                          onMouseDown={(e) => handleMouseDown(e, element.id)}
-                          className={`w-full h-full cursor-move bg-transparent ${
-                            isSelected || isMultiSelected
-                              ? "border-2 border-dashed border-blue-500"
-                              : "border-2 border-transparent"
-                          }`}
-                          style={{
-                            position: "relative",
-                          }}
-                        >
-                          {/* Render grouped children */}
-                          {element.children?.map((childId) => {
-                            const childElement = elements.find(
-                              (el) => el.id === childId
-                            );
-                            if (!childElement) return null;
-
-                            return (
-                              <div
-                                key={childId}
-                                className="absolute"
-                                style={{
-                                  left: `${childElement.x}px`,
-                                  top: `${childElement.y}px`,
-                                  width: `${childElement.width}px`,
-                                  height: `${childElement.height}px`,
-                                  transform: `rotate(${childElement.rotation}deg)`,
-                                  pointerEvents: "none", // Prevent individual interaction
-                                }}
-                              >
-                                {childElement.type === "text" && (
-                                  <div
-                                    className="w-full h-full cursor-text transition-all duration-200"
-                                    style={{
-                                      border: "2px solid transparent",
-                                      borderRadius: "8px",
-                                      minHeight: "100%",
-                                      display: "flex",
-                                      alignItems: "center",
-                                      justifyContent:
-                                        childElement.textAlign === "center"
-                                          ? "center"
-                                          : childElement.textAlign === "right"
-                                          ? "flex-end"
-                                          : "flex-start",
-                                      boxSizing: "border-box",
-                                      position: "relative",
-                                    }}
-                                  >
+                              return (
+                                <div
+                                  key={childId}
+                                  className="absolute"
+                                  style={{
+                                    left: `${childElement.x}px`,
+                                    top: `${childElement.y}px`,
+                                    width: `${childElement.width}px`,
+                                    height: `${childElement.height}px`,
+                                    transform: `rotate(${childElement.rotation}deg)`,
+                                    pointerEvents: "none", // Prevent individual interaction
+                                  }}
+                                >
+                                  {childElement.type === "text" && (
                                     <div
-                                      className="w-full h-full outline-none transition-all duration-200"
+                                      className="w-full h-full cursor-text transition-all duration-200"
                                       style={{
-                                        fontSize: `${childElement.fontSize}px`,
-                                        fontFamily: childElement.fontFamily,
-                                        color: childElement.color,
-                                        fontWeight: childElement.fontWeight,
-                                        textAlign: (childElement.textAlign ||
-                                          "left") as
-                                          | "left"
-                                          | "center"
-                                          | "right"
-                                          | "justify",
-                                        wordBreak: "break-word",
-                                        padding: "8px 12px",
-                                        width: "100%",
+                                        border: "2px solid transparent",
+                                        borderRadius: "8px",
                                         minHeight: "100%",
                                         display: "flex",
                                         alignItems: "center",
-                                        lineHeight: "1.5",
+                                        justifyContent:
+                                          childElement.textAlign === "center"
+                                            ? "center"
+                                            : childElement.textAlign === "right"
+                                            ? "flex-end"
+                                            : "flex-start",
                                         boxSizing: "border-box",
-                                        borderRadius: "6px",
-                                        flex: "1",
+                                        position: "relative",
                                       }}
                                     >
-                                      {childElement.content}
+                                      <div
+                                        className="w-full h-full outline-none transition-all duration-200"
+                                        style={{
+                                          fontSize: `${childElement.fontSize}px`,
+                                          fontFamily: childElement.fontFamily,
+                                          color: childElement.color,
+                                          fontWeight: childElement.fontWeight,
+                                          textAlign: (childElement.textAlign ||
+                                            "left") as
+                                            | "left"
+                                            | "center"
+                                            | "right"
+                                            | "justify",
+                                          wordBreak: "break-word",
+                                          padding: "8px 12px",
+                                          width: "100%",
+                                          minHeight: "100%",
+                                          display: "flex",
+                                          alignItems: "center",
+                                          lineHeight: "1.5",
+                                          boxSizing: "border-box",
+                                          borderRadius: "6px",
+                                          flex: "1",
+                                        }}
+                                      >
+                                        {childElement.content}
+                                      </div>
                                     </div>
-                                  </div>
-                                )}
+                                  )}
 
-                                {childElement.type === "image" &&
-                                  childElement.src && (
-                                    <div
-                                      className="relative w-full h-full overflow-hidden"
-                                      style={{
-                                        borderRadius: `${
-                                          childElement.borderRadius || 0
-                                        }px`,
-                                      }}
-                                    >
-                                      <Image
-                                        src={childElement.src}
-                                        alt="Grouped element"
-                                        fill
-                                        className="object-cover"
+                                  {childElement.type === "image" &&
+                                    childElement.src && (
+                                      <div
+                                        className="relative w-full h-full overflow-hidden"
                                         style={{
                                           borderRadius: `${
                                             childElement.borderRadius || 0
                                           }px`,
                                         }}
-                                        draggable={false}
-                                        unoptimized
-                                      />
-                                    </div>
+                                      >
+                                        <Image
+                                          src={childElement.src}
+                                          alt="Grouped element"
+                                          fill
+                                          className="object-cover"
+                                          style={{
+                                            borderRadius: `${
+                                              childElement.borderRadius || 0
+                                            }px`,
+                                          }}
+                                          draggable={false}
+                                          unoptimized
+                                        />
+                                      </div>
+                                    )}
+
+                                  {childElement.type === "shape" && (
+                                    <ShapeRenderer
+                                      shapeType={
+                                        childElement.shapeType || "rect"
+                                      }
+                                      width={childElement.width}
+                                      height={childElement.height}
+                                      backgroundColor={
+                                        childElement.backgroundColor ||
+                                        "#8b5cf6"
+                                      }
+                                      borderRadius={childElement.borderRadius}
+                                      borderTopLeftRadius={
+                                        childElement.borderTopLeftRadius
+                                      }
+                                      borderTopRightRadius={
+                                        childElement.borderTopRightRadius
+                                      }
+                                      borderBottomLeftRadius={
+                                        childElement.borderBottomLeftRadius
+                                      }
+                                      borderBottomRightRadius={
+                                        childElement.borderBottomRightRadius
+                                      }
+                                      strokeColor={childElement.strokeColor}
+                                      strokeWidth={childElement.strokeWidth}
+                                      strokeStyle={childElement.strokeStyle}
+                                      backgroundImage={childElement.src}
+                                      className="w-full h-full"
+                                    />
                                   )}
+                                </div>
+                              );
+                            })}
+                            {/* Group label removed per user request */}
+                          </div>
+                        )}
 
-                                {childElement.type === "shape" && (
-                                  <ShapeRenderer
-                                    shapeType={childElement.shapeType || "rect"}
-                                    width={childElement.width}
-                                    height={childElement.height}
-                                    backgroundColor={
-                                      childElement.backgroundColor || "#8b5cf6"
-                                    }
-                                    borderRadius={childElement.borderRadius}
-                                    borderTopLeftRadius={
-                                      childElement.borderTopLeftRadius
-                                    }
-                                    borderTopRightRadius={
-                                      childElement.borderTopRightRadius
-                                    }
-                                    borderBottomLeftRadius={
-                                      childElement.borderBottomLeftRadius
-                                    }
-                                    borderBottomRightRadius={
-                                      childElement.borderBottomRightRadius
-                                    }
-                                    strokeColor={childElement.strokeColor}
-                                    strokeWidth={childElement.strokeWidth}
-                                    strokeStyle={childElement.strokeStyle}
-                                    backgroundImage={childElement.src}
-                                    className="w-full h-full"
-                                  />
-                                )}
-                              </div>
-                            );
-                          })}
-                          {/* Group label removed per user request */}
-                        </div>
-                      )}
-
-                      {element.type === "text" && (
-                        <>
-                          {/* Full-size clickable wrapper */}
-                          <div
-                            onMouseDown={(e) => {
-                              e.stopPropagation();
-                              setSelectedElement(element.id);
-
-                              // Start drag tracking
-                              dragRef.current = {
-                                isDragging: false,
-                                startX: e.clientX,
-                                startY: e.clientY,
-                                elementId: element.id,
-                              };
-                            }}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedElement(element.id);
-                              // Focus on content editable for editing
-                              if (!dragRef.current.isDragging) {
-                                const textContent =
-                                  e.currentTarget.querySelector(
-                                    "[contenteditable]"
-                                  ) as HTMLDivElement;
-                                if (textContent) {
-                                  textContent.focus();
-                                }
-                              }
-                            }}
-                            className="w-full h-full cursor-text transition-all duration-200 group hover:bg-slate-50"
-                            style={{
-                              border: isSelected
-                                ? "2px solid rgba(99, 102, 241, 0.4)"
-                                : "2px solid transparent",
-                              backgroundColor: isSelected
-                                ? "rgba(99, 102, 241, 0.03)"
-                                : "transparent",
-                              borderRadius: "8px",
-                              minHeight: "100%",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent:
-                                element.textAlign === "center"
-                                  ? "center"
-                                  : element.textAlign === "right"
-                                  ? "flex-end"
-                                  : "flex-start",
-                              boxSizing: "border-box",
-                              position: "relative",
-                              ...(isSelected && {
-                                boxShadow:
-                                  "0 0 0 4px rgba(99, 102, 241, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04)",
-                              }),
-                            }}
-                          >
-                            {/* Placeholder text */}
-                            {!element.content && !isSelected && (
-                              <div
-                                className="absolute inset-0 flex items-center justify-center text-gray-400 text-sm italic pointer-events-none"
-                                style={{
-                                  fontSize: `${Math.max(
-                                    (element.fontSize || 16) * 0.8,
-                                    12
-                                  )}px`,
-                                  fontFamily: element.fontFamily,
-                                }}
-                              >
-                                Click to edit text
-                              </div>
-                            )}
+                        {element.type === "text" && (
+                          <>
+                            {/* Full-size clickable wrapper */}
                             <div
-                              contentEditable
-                              suppressContentEditableWarning
+                              onMouseDown={(e) => {
+                                e.stopPropagation();
+                                setSelectedElement(element.id);
+
+                                // Start drag tracking
+                                dragRef.current = {
+                                  isDragging: false,
+                                  startX: e.clientX,
+                                  startY: e.clientY,
+                                  elementId: element.id,
+                                };
+                              }}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setSelectedElement(element.id);
-                                // Focus immediately for editing
-                                const target = e.target as HTMLDivElement;
-                                if (target && !dragRef.current.isDragging) {
-                                  target.focus();
+                                // Focus on content editable for editing
+                                if (!dragRef.current.isDragging) {
+                                  const textContent =
+                                    e.currentTarget.querySelector(
+                                      "[contenteditable]"
+                                    ) as HTMLDivElement;
+                                  if (textContent) {
+                                    textContent.focus();
+                                  }
                                 }
                               }}
-                              onBlur={(e) =>
-                                updateElementContent(element.id, {
-                                  content: e.target.textContent || "",
-                                })
-                              }
-                              onFocus={(e) => {
-                                e.stopPropagation();
-                                setSelectedElement(element.id);
-                              }}
-                              onDoubleClick={(e) => {
-                                e.stopPropagation();
-                                const target = e.target as HTMLDivElement;
-                                target.focus();
-                                // Select all text on double click
-                                const range = document.createRange();
-                                range.selectNodeContents(target);
-                                const selection = window.getSelection();
-                                selection?.removeAllRanges();
-                                selection?.addRange(range);
-                              }}
-                              className="w-full h-full outline-none cursor-text transition-all duration-200 focus:bg-white focus:shadow-sm"
+                              className="w-full h-full cursor-text transition-all duration-200 group hover:bg-slate-50"
                               style={{
-                                fontSize: `${element.fontSize}px`,
-                                fontFamily: element.fontFamily,
-                                color: element.color,
-                                fontWeight: element.fontWeight,
-                                textAlign: (element.textAlign || "left") as
-                                  | "left"
-                                  | "center"
-                                  | "right"
-                                  | "justify",
-                                wordBreak: "break-word",
-                                padding: "8px 12px",
-                                width: "100%",
+                                border: isSelected
+                                  ? "2px solid rgba(99, 102, 241, 0.4)"
+                                  : "2px solid transparent",
+                                backgroundColor: isSelected
+                                  ? "rgba(99, 102, 241, 0.03)"
+                                  : "transparent",
+                                borderRadius: "8px",
                                 minHeight: "100%",
                                 display: "flex",
                                 alignItems: "center",
-                                lineHeight: "1.5",
+                                justifyContent:
+                                  element.textAlign === "center"
+                                    ? "center"
+                                    : element.textAlign === "right"
+                                    ? "flex-end"
+                                    : "flex-start",
                                 boxSizing: "border-box",
-                                borderRadius: "6px",
-                                backgroundColor: "transparent",
-                                transition: "all 0.2s ease",
-                                flex: "1",
+                                position: "relative",
+                                ...(isSelected && {
+                                  boxShadow:
+                                    "0 0 0 4px rgba(99, 102, 241, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04)",
+                                }),
                               }}
                             >
-                              {element.content}
+                              {/* Placeholder text */}
+                              {!element.content && !isSelected && (
+                                <div
+                                  className="absolute inset-0 flex items-center justify-center text-gray-400 text-sm italic pointer-events-none"
+                                  style={{
+                                    fontSize: `${Math.max(
+                                      (element.fontSize || 16) * 0.8,
+                                      12
+                                    )}px`,
+                                    fontFamily: element.fontFamily,
+                                  }}
+                                >
+                                  Click to edit text
+                                </div>
+                              )}
+                              <div
+                                contentEditable
+                                suppressContentEditableWarning
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedElement(element.id);
+                                  // Focus immediately for editing
+                                  const target = e.target as HTMLDivElement;
+                                  if (target && !dragRef.current.isDragging) {
+                                    target.focus();
+                                  }
+                                }}
+                                onBlur={(e) =>
+                                  updateElementContent(element.id, {
+                                    content: e.target.textContent || "",
+                                  })
+                                }
+                                onFocus={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedElement(element.id);
+                                }}
+                                onDoubleClick={(e) => {
+                                  e.stopPropagation();
+                                  const target = e.target as HTMLDivElement;
+                                  target.focus();
+                                  // Select all text on double click
+                                  const range = document.createRange();
+                                  range.selectNodeContents(target);
+                                  const selection = window.getSelection();
+                                  selection?.removeAllRanges();
+                                  selection?.addRange(range);
+                                }}
+                                className="w-full h-full outline-none cursor-text transition-all duration-200 focus:bg-white focus:shadow-sm"
+                                style={{
+                                  fontSize: `${element.fontSize}px`,
+                                  fontFamily: element.fontFamily,
+                                  color: element.color,
+                                  fontWeight: element.fontWeight,
+                                  textAlign: (element.textAlign || "left") as
+                                    | "left"
+                                    | "center"
+                                    | "right"
+                                    | "justify",
+                                  wordBreak: "break-word",
+                                  padding: "8px 12px",
+                                  width: "100%",
+                                  minHeight: "100%",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  lineHeight: "1.5",
+                                  boxSizing: "border-box",
+                                  borderRadius: "6px",
+                                  backgroundColor: "transparent",
+                                  transition: "all 0.2s ease",
+                                  flex: "1",
+                                }}
+                              >
+                                {element.content}
+                              </div>
                             </div>
-                          </div>
-                        </>
-                      )}
+                          </>
+                        )}
 
-                      {element.type === "image" && element.src && (
-                        <div
-                          onMouseDown={(e) => handleMouseDown(e, element.id)}
-                          className="relative w-full h-full overflow-hidden cursor-move"
-                          style={{
-                            borderRadius: `${element.borderRadius || 0}px`,
-                          }}
-                        >
-                          <Image
-                            src={element.src}
-                            alt="Artboard element"
-                            fill
-                            className="object-cover"
+                        {element.type === "image" && element.src && (
+                          <div
+                            onMouseDown={(e) => handleMouseDown(e, element.id)}
+                            className="relative w-full h-full overflow-hidden cursor-move"
                             style={{
                               borderRadius: `${element.borderRadius || 0}px`,
                             }}
-                            draggable={false}
-                            unoptimized // Allow data URLs
-                          />
-                        </div>
-                      )}
-
-                      {element.type === "shape" && (
-                        <ShapeRenderer
-                          shapeType={element.shapeType || "rect"}
-                          width={element.width}
-                          height={element.height}
-                          backgroundColor={element.backgroundColor || "#8b5cf6"}
-                          borderRadius={element.borderRadius}
-                          borderTopLeftRadius={element.borderTopLeftRadius}
-                          borderTopRightRadius={element.borderTopRightRadius}
-                          borderBottomLeftRadius={
-                            element.borderBottomLeftRadius
-                          }
-                          borderBottomRightRadius={
-                            element.borderBottomRightRadius
-                          }
-                          strokeColor={element.strokeColor}
-                          strokeWidth={element.strokeWidth}
-                          strokeStyle={element.strokeStyle}
-                          backgroundImage={element.src}
-                          onDoubleClick={() =>
-                            handleShapeImageUpload(element.id)
-                          }
-                          onMouseDown={(e) => handleMouseDown(e, element.id)}
-                          className="w-full h-full"
-                        />
-                      )}
-
-                      {/* Resize handles for selected element */}
-                      {(isSelected || isMultiSelected) &&
-                        element.type !== "group" && (
-                          <>
-                            <div
-                              className="absolute -top-1.5 -left-1.5 w-3 h-3 bg-white border-2 border-indigo-500 rounded-sm cursor-nw-resize shadow-sm hover:scale-110 transition-transform"
-                              onMouseDown={(e) =>
-                                handleResizeStart(e, element.id, "nw")
-                              }
-                            ></div>
-                            <div
-                              className="absolute -top-1.5 -right-1.5 w-3 h-3 bg-white border-2 border-indigo-500 rounded-sm cursor-ne-resize shadow-sm hover:scale-110 transition-transform"
-                              onMouseDown={(e) =>
-                                handleResizeStart(e, element.id, "ne")
-                              }
-                            ></div>
-                            <div
-                              className="absolute -bottom-1.5 -left-1.5 w-3 h-3 bg-white border-2 border-indigo-500 rounded-sm cursor-sw-resize shadow-sm hover:scale-110 transition-transform"
-                              onMouseDown={(e) =>
-                                handleResizeStart(e, element.id, "sw")
-                              }
-                            ></div>
-                            <div
-                              className="absolute -bottom-1.5 -right-1.5 w-3 h-3 bg-white border-2 border-indigo-500 rounded-sm cursor-se-resize shadow-sm hover:scale-110 transition-transform"
-                              onMouseDown={(e) =>
-                                handleResizeStart(e, element.id, "se")
-                              }
-                            ></div>
-
-                            {/* Edge handles */}
-                            <div
-                              className="absolute -top-1.5 left-1/2 transform -translate-x-1/2 w-3 h-3 bg-white border-2 border-indigo-500 rounded-sm cursor-n-resize shadow-sm hover:scale-110 transition-transform"
-                              onMouseDown={(e) =>
-                                handleResizeStart(e, element.id, "n")
-                              }
-                            ></div>
-                            <div
-                              className="absolute -bottom-1.5 left-1/2 transform -translate-x-1/2 w-3 h-3 bg-white border-2 border-indigo-500 rounded-sm cursor-s-resize shadow-sm hover:scale-110 transition-transform"
-                              onMouseDown={(e) =>
-                                handleResizeStart(e, element.id, "s")
-                              }
-                            ></div>
-                            <div
-                              className="absolute -left-1.5 top-1/2 transform -translate-y-1/2 w-3 h-3 bg-white border-2 border-indigo-500 rounded-sm cursor-w-resize shadow-sm hover:scale-110 transition-transform"
-                              onMouseDown={(e) =>
-                                handleResizeStart(e, element.id, "w")
-                              }
-                            ></div>
-                            <div
-                              className="absolute -right-1.5 top-1/2 transform -translate-y-1/2 w-3 h-3 bg-white border-2 border-indigo-500 rounded-sm cursor-e-resize shadow-sm hover:scale-110 transition-transform"
-                              onMouseDown={(e) =>
-                                handleResizeStart(e, element.id, "e")
-                              }
-                            ></div>
-                          </>
+                          >
+                            <Image
+                              src={element.src}
+                              alt="Artboard element"
+                              fill
+                              className="object-cover"
+                              style={{
+                                borderRadius: `${element.borderRadius || 0}px`,
+                              }}
+                              draggable={false}
+                              unoptimized // Allow data URLs
+                            />
+                          </div>
                         )}
-                    </div>
-                  );
-                })}
 
-              {/* Context Menu */}
-              {contextMenu && (
-                <div
-                  className="fixed bg-white border border-gray-200 rounded-lg shadow-lg py-2 z-50"
-                  style={{
-                    left: `${contextMenu.x}px`,
-                    top: `${contextMenu.y}px`,
-                  }}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {selectedElements.length >= 2 && (
-                    <button
-                      onClick={() => {
-                        groupElements();
-                        setContextMenu(null);
-                      }}
-                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
-                    >
-                      Group Elements
-                    </button>
-                  )}
-                  {selectedElement &&
-                    elements.find((el) => el.id === selectedElement)?.type ===
-                      "group" && (
+                        {element.type === "shape" && (
+                          <ShapeRenderer
+                            shapeType={element.shapeType || "rect"}
+                            width={element.width}
+                            height={element.height}
+                            backgroundColor={
+                              element.backgroundColor || "#8b5cf6"
+                            }
+                            borderRadius={element.borderRadius}
+                            borderTopLeftRadius={element.borderTopLeftRadius}
+                            borderTopRightRadius={element.borderTopRightRadius}
+                            borderBottomLeftRadius={
+                              element.borderBottomLeftRadius
+                            }
+                            borderBottomRightRadius={
+                              element.borderBottomRightRadius
+                            }
+                            strokeColor={element.strokeColor}
+                            strokeWidth={element.strokeWidth}
+                            strokeStyle={element.strokeStyle}
+                            backgroundImage={element.src}
+                            onDoubleClick={() =>
+                              handleShapeImageUpload(element.id)
+                            }
+                            onMouseDown={(e) => handleMouseDown(e, element.id)}
+                            className="w-full h-full"
+                          />
+                        )}
+
+                        {/* Resize handles for selected element */}
+                        {(isSelected || isMultiSelected) &&
+                          element.type !== "group" && (
+                            <>
+                              <div
+                                className="absolute -top-1.5 -left-1.5 w-3 h-3 bg-white border-2 border-indigo-500 rounded-sm cursor-nw-resize shadow-sm hover:scale-110 transition-transform"
+                                onMouseDown={(e) =>
+                                  handleResizeStart(e, element.id, "nw")
+                                }
+                              ></div>
+                              <div
+                                className="absolute -top-1.5 -right-1.5 w-3 h-3 bg-white border-2 border-indigo-500 rounded-sm cursor-ne-resize shadow-sm hover:scale-110 transition-transform"
+                                onMouseDown={(e) =>
+                                  handleResizeStart(e, element.id, "ne")
+                                }
+                              ></div>
+                              <div
+                                className="absolute -bottom-1.5 -left-1.5 w-3 h-3 bg-white border-2 border-indigo-500 rounded-sm cursor-sw-resize shadow-sm hover:scale-110 transition-transform"
+                                onMouseDown={(e) =>
+                                  handleResizeStart(e, element.id, "sw")
+                                }
+                              ></div>
+                              <div
+                                className="absolute -bottom-1.5 -right-1.5 w-3 h-3 bg-white border-2 border-indigo-500 rounded-sm cursor-se-resize shadow-sm hover:scale-110 transition-transform"
+                                onMouseDown={(e) =>
+                                  handleResizeStart(e, element.id, "se")
+                                }
+                              ></div>
+
+                              {/* Edge handles */}
+                              <div
+                                className="absolute -top-1.5 left-1/2 transform -translate-x-1/2 w-3 h-3 bg-white border-2 border-indigo-500 rounded-sm cursor-n-resize shadow-sm hover:scale-110 transition-transform"
+                                onMouseDown={(e) =>
+                                  handleResizeStart(e, element.id, "n")
+                                }
+                              ></div>
+                              <div
+                                className="absolute -bottom-1.5 left-1/2 transform -translate-x-1/2 w-3 h-3 bg-white border-2 border-indigo-500 rounded-sm cursor-s-resize shadow-sm hover:scale-110 transition-transform"
+                                onMouseDown={(e) =>
+                                  handleResizeStart(e, element.id, "s")
+                                }
+                              ></div>
+                              <div
+                                className="absolute -left-1.5 top-1/2 transform -translate-y-1/2 w-3 h-3 bg-white border-2 border-indigo-500 rounded-sm cursor-w-resize shadow-sm hover:scale-110 transition-transform"
+                                onMouseDown={(e) =>
+                                  handleResizeStart(e, element.id, "w")
+                                }
+                              ></div>
+                              <div
+                                className="absolute -right-1.5 top-1/2 transform -translate-y-1/2 w-3 h-3 bg-white border-2 border-indigo-500 rounded-sm cursor-e-resize shadow-sm hover:scale-110 transition-transform"
+                                onMouseDown={(e) =>
+                                  handleResizeStart(e, element.id, "e")
+                                }
+                              ></div>
+                            </>
+                          )}
+                      </div>
+                    );
+                  })}
+
+                {/* Context Menu */}
+                {contextMenu && (
+                  <div
+                    className="fixed bg-white border border-gray-200 rounded-lg shadow-lg py-2 z-50"
+                    style={{
+                      left: `${contextMenu.x}px`,
+                      top: `${contextMenu.y}px`,
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {selectedElements.length >= 2 && (
                       <button
                         onClick={() => {
-                          ungroupElements();
+                          groupElements();
                           setContextMenu(null);
                         }}
                         className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
                       >
-                        Ungroup Elements
+                        Group Elements
                       </button>
                     )}
-                  {(selectedElement || selectedElements.length > 0) && (
-                    <button
-                      onClick={() => {
-                        deleteElement();
-                        setContextMenu(null);
-                      }}
-                      className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
-                    >
-                      Delete
-                    </button>
-                  )}
-                </div>
-              )}
+                    {selectedElement &&
+                      elements.find((el) => el.id === selectedElement)?.type ===
+                        "group" && (
+                        <button
+                          onClick={() => {
+                            ungroupElements();
+                            setContextMenu(null);
+                          }}
+                          className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                        >
+                          Ungroup Elements
+                        </button>
+                      )}
+                    {(selectedElement || selectedElements.length > 0) && (
+                      <button
+                        onClick={() => {
+                          deleteElement();
+                          setContextMenu(null);
+                        }}
+                        className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                      >
+                        Delete
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* พื้นที่ด้านขวาสำหรับ Tools Menu */}
-        <div className="w-96 flex-shrink-0">
-          {/* Properties Panel - อยู่ในพื้นที่ด้านขวา */}
-          {selectedElement && (
-            <div className="bg-white rounded-xl shadow-xl p-6 border border-gray-100 sticky top-6 backdrop-blur-sm">
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
-                  <div className="w-2 h-2 bg-indigo-500 rounded-full"></div>
-                  Properties
-                </h3>
-                <button
-                  onClick={() => setSelectedElement(null)}
-                  className="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-all duration-200"
-                >
-                  ✕
-                </button>
-              </div>
-              {(() => {
-                const element = elements.find(
-                  (el) => el.id === selectedElement
-                );
-                if (!element) return null;
+          {/* พื้นที่ด้านขวาสำหรับ Tools Menu */}
+          <div className="w-96 flex-shrink-0">
+            {/* Properties Panel - อยู่ในพื้นที่ด้านขวา */}
+            {selectedElement && (
+              <div className="bg-white rounded-xl shadow-xl border border-gray-100 sticky top-6 max-h-[calc(100vh-120px)] overflow-hidden backdrop-blur-sm">
+                <div className="flex justify-between items-center p-6 pb-4 border-b border-gray-100 flex-shrink-0">
+                  <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                    <div className="w-2 h-2 bg-indigo-500 rounded-full"></div>
+                    Properties
+                  </h3>
+                  <button
+                    onClick={() => setSelectedElement(null)}
+                    className="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-all duration-200"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="p-6 pt-4 overflow-y-auto max-h-[calc(100vh-200px)] custom-scrollbar">
+                  {(() => {
+                    const element = elements.find(
+                      (el) => el.id === selectedElement
+                    );
+                    if (!element) return null;
 
-                return (
-                  <div className="space-y-6">
-                    <div className="bg-gray-50 rounded-lg p-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-3">
-                        Position
-                      </label>
-                      <div className="grid grid-cols-2 gap-3">
-                        <input
-                          type="number"
-                          value={element.x}
-                          onChange={(e) =>
-                            updateElementContent(element.id, {
-                              x: parseInt(e.target.value) || 0,
-                            })
-                          }
-                          className="px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
-                          placeholder="X"
-                        />
-                        <input
-                          type="number"
-                          value={element.y}
-                          onChange={(e) =>
-                            updateElementContent(element.id, {
-                              y: parseInt(e.target.value) || 0,
-                            })
-                          }
-                          className="px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
-                          placeholder="Y"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="bg-gray-50 rounded-lg p-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-3">
-                        Size
-                      </label>
-                      <div className="grid grid-cols-2 gap-3">
-                        <input
-                          type="number"
-                          value={element.width}
-                          onChange={(e) =>
-                            updateElementContent(element.id, {
-                              width: parseInt(e.target.value) || 0,
-                            })
-                          }
-                          className="px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
-                          placeholder="Width"
-                        />
-                        <input
-                          type="number"
-                          value={element.height}
-                          onChange={(e) =>
-                            updateElementContent(element.id, {
-                              height: parseInt(e.target.value) || 0,
-                            })
-                          }
-                          className="px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
-                          placeholder="Height"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="bg-gray-50 rounded-lg p-4">
-                      <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-3">
-                        Rotation
-                        <span className="text-xs text-gray-500 bg-white px-2 py-1 rounded">
-                          {element.rotation}°
-                        </span>
-                      </label>
-                      <input
-                        type="range"
-                        min="0"
-                        max="360"
-                        value={element.rotation}
-                        onChange={(e) =>
-                          updateElementContent(element.id, {
-                            rotation: parseInt(e.target.value),
-                          })
-                        }
-                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
-                        style={{
-                          background: `linear-gradient(to right, #6366f1 0%, #6366f1 ${
-                            (element.rotation / 360) * 100
-                          }%, #e5e7eb ${
-                            (element.rotation / 360) * 100
-                          }%, #e5e7eb 100%)`,
-                        }}
-                      />
-                    </div>
-
-                    {element.type === "text" && (
-                      <>
-                        <div className="bg-blue-50 rounded-lg p-4">
+                    return (
+                      <div className="space-y-6">
+                        <div className="bg-gray-50 rounded-lg p-4">
                           <label className="block text-sm font-medium text-gray-700 mb-3">
-                            Font Family
+                            Position
                           </label>
-                          <select
-                            value={element.fontFamily || "Arial"}
-                            onChange={(e) =>
-                              updateElementContent(element.id, {
-                                fontFamily: e.target.value,
-                              })
-                            }
-                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-white text-gray-800"
-                          >
-                            <option value="Arial, sans-serif">Arial</option>
-                            <option value="Helvetica, Arial, sans-serif">
-                              Helvetica
-                            </option>
-                            <option value="'Times New Roman', Times, serif">
-                              Times New Roman
-                            </option>
-                            <option value="Georgia, 'Times New Roman', Times, serif">
-                              Georgia
-                            </option>
-                            <option value="Verdana, Geneva, sans-serif">
-                              Verdana
-                            </option>
-                            <option value="'Courier New', Courier, monospace">
-                              Courier New
-                            </option>
-                            <option value="Impact, Arial Black, sans-serif">
-                              Impact
-                            </option>
-                            <option value="'Comic Sans MS', cursive">
-                              Comic Sans MS
-                            </option>
-                            <option value="'Great Vibes', cursive">
-                              Great Vibes
-                            </option>
-                            <option value="'Dancing Script', cursive">
-                              Dancing Script
-                            </option>
-                            <option value="'Alex Brush', cursive">
-                              Alex Brush
-                            </option>
-                            <option value="'Parisienne', cursive">
-                              Parisienne
-                            </option>
-                            <option value="'Allura', cursive">Allura</option>
-                            <option value="'Sacramento', cursive">
-                              Sacramento
-                            </option>
-                            <option value="'Cookie', cursive">Cookie</option>
-                            <option value="'Kaushan Script', cursive">
-                              Kaushan Script
-                            </option>
-                            <option value="'Satisfy', cursive">Satisfy</option>
-                            <option value="'Herr Von Muellerhoff', cursive">
-                              Herr Von Muellerhoff
-                            </option>
-                          </select>
+                          <div className="grid grid-cols-2 gap-3">
+                            <input
+                              type="number"
+                              value={element.x}
+                              onChange={(e) =>
+                                updateElementContent(element.id, {
+                                  x: parseInt(e.target.value) || 0,
+                                })
+                              }
+                              className="px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                              placeholder="X"
+                            />
+                            <input
+                              type="number"
+                              value={element.y}
+                              onChange={(e) =>
+                                updateElementContent(element.id, {
+                                  y: parseInt(e.target.value) || 0,
+                                })
+                              }
+                              className="px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                              placeholder="Y"
+                            />
+                          </div>
                         </div>
-                        <div className="bg-blue-50 rounded-lg p-4">
+
+                        <div className="bg-gray-50 rounded-lg p-4">
                           <label className="block text-sm font-medium text-gray-700 mb-3">
-                            Font Size
+                            Size
+                          </label>
+                          <div className="grid grid-cols-2 gap-3">
+                            <input
+                              type="number"
+                              value={element.width}
+                              onChange={(e) =>
+                                updateElementContent(element.id, {
+                                  width: parseInt(e.target.value) || 0,
+                                })
+                              }
+                              className="px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                              placeholder="Width"
+                            />
+                            <input
+                              type="number"
+                              value={element.height}
+                              onChange={(e) =>
+                                updateElementContent(element.id, {
+                                  height: parseInt(e.target.value) || 0,
+                                })
+                              }
+                              className="px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                              placeholder="Height"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="bg-gray-50 rounded-lg p-4">
+                          <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-3">
+                            Rotation
+                            <span className="text-xs text-gray-500 bg-white px-2 py-1 rounded">
+                              {element.rotation}°
+                            </span>
                           </label>
                           <input
-                            type="number"
-                            value={element.fontSize}
+                            type="range"
+                            min="0"
+                            max="360"
+                            value={element.rotation}
                             onChange={(e) =>
                               updateElementContent(element.id, {
-                                fontSize: parseInt(e.target.value) || 16,
+                                rotation: parseInt(e.target.value),
                               })
                             }
-                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-white text-gray-800"
+                            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
+                            style={{
+                              background: `linear-gradient(to right, #6366f1 0%, #6366f1 ${
+                                (element.rotation / 360) * 100
+                              }%, #e5e7eb ${
+                                (element.rotation / 360) * 100
+                              }%, #e5e7eb 100%)`,
+                            }}
                           />
                         </div>
-                        <div className="bg-blue-50 rounded-lg p-4">
-                          <label className="block text-sm font-medium text-gray-700 mb-3">
-                            Font Weight
-                          </label>
-                          <select
-                            value={element.fontWeight || "normal"}
-                            onChange={(e) =>
-                              updateElementContent(element.id, {
-                                fontWeight: e.target.value,
-                              })
-                            }
-                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-white text-gray-800"
-                          >
-                            <option value="normal">Normal</option>
-                            <option value="bold">Bold</option>
-                            <option value="lighter">Lighter</option>
-                            <option value="bolder">Bolder</option>
-                          </select>
-                        </div>
-                        <div className="bg-blue-50 rounded-lg p-4">
-                          <label className="block text-sm font-medium text-gray-700 mb-3">
-                            Text Align
-                          </label>
-                          <select
-                            value={element.textAlign || "left"}
-                            onChange={(e) =>
-                              updateElementContent(element.id, {
-                                textAlign: e.target.value,
-                              })
-                            }
-                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-white text-gray-800"
-                          >
-                            <option value="left">Left</option>
-                            <option value="center">Center</option>
-                            <option value="right">Right</option>
-                            <option value="justify">Justify</option>
-                          </select>
-                        </div>
-                        <div className="bg-blue-50 rounded-lg p-4">
-                          <label className="block text-sm font-medium text-gray-700 mb-3">
-                            Color
-                          </label>
-                          <div className="flex items-center gap-3">
-                            <input
-                              type="color"
-                              value={element.color}
-                              onChange={(e) =>
-                                updateElementContent(element.id, {
-                                  color: e.target.value,
-                                })
-                              }
-                              className="w-12 h-10 border border-gray-200 rounded-lg cursor-pointer"
-                            />
-                            <input
-                              type="text"
-                              value={element.color}
-                              onChange={(e) =>
-                                updateElementContent(element.id, {
-                                  color: e.target.value,
-                                })
-                              }
-                              className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-white text-gray-800 font-mono"
-                              placeholder="#000000"
-                            />
-                          </div>
-                        </div>
-                      </>
-                    )}
 
-                    {element.type === "shape" && (
-                      <>
-                        <div className="bg-purple-50 rounded-lg p-4">
-                          <label className="block text-sm font-medium text-gray-700 mb-3">
-                            Shape Type
-                          </label>
-                          <select
-                            value={element.shapeType || "rect"}
-                            onChange={(e) =>
-                              updateElementContent(element.id, {
-                                shapeType: e.target.value as
-                                  | "rect"
-                                  | "circle"
-                                  | "ellipse"
-                                  | "triangle"
-                                  | "pentagon"
-                                  | "hexagon"
-                                  | "star",
-                              })
-                            }
-                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all bg-white text-gray-800"
-                          >
-                            <option value="rect">Rectangle</option>
-                            <option value="circle">Circle</option>
-                            <option value="ellipse">Ellipse</option>
-                            <option value="triangle">Triangle</option>
-                            <option value="pentagon">Pentagon</option>
-                            <option value="hexagon">Hexagon</option>
-                            <option value="star">Star</option>
-                          </select>
-                        </div>
-                        <div className="bg-purple-50 rounded-lg p-4">
-                          <label className="block text-sm font-medium text-gray-700 mb-3">
-                            Background Color
-                          </label>
-                          <div className="flex items-center gap-3">
-                            <input
-                              type="color"
-                              value={element.backgroundColor}
-                              onChange={(e) =>
-                                updateElementContent(element.id, {
-                                  backgroundColor: e.target.value,
-                                })
-                              }
-                              className="w-12 h-10 border border-gray-200 rounded-lg cursor-pointer"
-                            />
-                            <input
-                              type="text"
-                              value={element.backgroundColor}
-                              onChange={(e) =>
-                                updateElementContent(element.id, {
-                                  backgroundColor: e.target.value,
-                                })
-                              }
-                              className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all bg-white text-gray-800 font-mono"
-                              placeholder="#000000"
-                            />
-                          </div>
-                        </div>
-
-                        {element.shapeType === "rect" && (
-                          <div className="bg-purple-50 rounded-lg p-4">
-                            <label className="block text-sm font-medium text-gray-700 mb-3">
-                              Border Radius
-                            </label>
-
-                            {/* Global Border Radius */}
-                            <div className="mb-4">
-                              <label className="flex items-center gap-2 text-xs text-gray-600 mb-2">
-                                All Corners
-                                <span className="text-xs text-gray-500 bg-white px-2 py-1 rounded">
-                                  {element.borderRadius || 0}px
-                                </span>
+                        {element.type === "text" && (
+                          <>
+                            <div className="bg-blue-50 rounded-lg p-4">
+                              <label className="block text-sm font-medium text-gray-700 mb-3">
+                                Font Family
+                              </label>
+                              <select
+                                value={element.fontFamily || "Arial"}
+                                onChange={(e) =>
+                                  updateElementContent(element.id, {
+                                    fontFamily: e.target.value,
+                                  })
+                                }
+                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-white text-gray-800"
+                              >
+                                <option value="Arial, sans-serif">Arial</option>
+                                <option value="Helvetica, Arial, sans-serif">
+                                  Helvetica
+                                </option>
+                                <option value="'Times New Roman', Times, serif">
+                                  Times New Roman
+                                </option>
+                                <option value="Georgia, 'Times New Roman', Times, serif">
+                                  Georgia
+                                </option>
+                                <option value="Verdana, Geneva, sans-serif">
+                                  Verdana
+                                </option>
+                                <option value="'Courier New', Courier, monospace">
+                                  Courier New
+                                </option>
+                                <option value="Impact, Arial Black, sans-serif">
+                                  Impact
+                                </option>
+                                <option value="'Comic Sans MS', cursive">
+                                  Comic Sans MS
+                                </option>
+                                <option value="'Great Vibes', cursive">
+                                  Great Vibes
+                                </option>
+                                <option value="'Dancing Script', cursive">
+                                  Dancing Script
+                                </option>
+                                <option value="'Alex Brush', cursive">
+                                  Alex Brush
+                                </option>
+                                <option value="'Parisienne', cursive">
+                                  Parisienne
+                                </option>
+                                <option value="'Allura', cursive">
+                                  Allura
+                                </option>
+                                <option value="'Sacramento', cursive">
+                                  Sacramento
+                                </option>
+                                <option value="'Cookie', cursive">
+                                  Cookie
+                                </option>
+                                <option value="'Kaushan Script', cursive">
+                                  Kaushan Script
+                                </option>
+                                <option value="'Satisfy', cursive">
+                                  Satisfy
+                                </option>
+                                <option value="'Herr Von Muellerhoff', cursive">
+                                  Herr Von Muellerhoff
+                                </option>
+                              </select>
+                            </div>
+                            <div className="bg-blue-50 rounded-lg p-4">
+                              <label className="block text-sm font-medium text-gray-700 mb-3">
+                                Font Size
                               </label>
                               <input
-                                type="range"
-                                min="0"
-                                max="50"
-                                value={element.borderRadius || 0}
-                                onChange={(e) => {
-                                  const radius = parseInt(e.target.value) || 0;
+                                type="number"
+                                value={element.fontSize}
+                                onChange={(e) =>
                                   updateElementContent(element.id, {
-                                    borderRadius: radius,
-                                    borderTopLeftRadius: radius,
-                                    borderTopRightRadius: radius,
-                                    borderBottomLeftRadius: radius,
-                                    borderBottomRightRadius: radius,
-                                  });
-                                }}
-                                className="w-full accent-purple-500"
+                                    fontSize: parseInt(e.target.value) || 16,
+                                  })
+                                }
+                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-white text-gray-800"
                               />
                             </div>
-
-                            {/* Individual Corner Controls */}
-                            <div className="space-y-2">
-                              <label className="text-xs text-gray-600 mb-2 block">
-                                Individual Corners:
+                            <div className="bg-blue-50 rounded-lg p-4">
+                              <label className="block text-sm font-medium text-gray-700 mb-3">
+                                Font Weight
                               </label>
+                              <select
+                                value={element.fontWeight || "normal"}
+                                onChange={(e) =>
+                                  updateElementContent(element.id, {
+                                    fontWeight: e.target.value,
+                                  })
+                                }
+                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-white text-gray-800"
+                              >
+                                <option value="normal">Normal</option>
+                                <option value="bold">Bold</option>
+                                <option value="lighter">Lighter</option>
+                                <option value="bolder">Bolder</option>
+                              </select>
+                            </div>
+                            <div className="bg-blue-50 rounded-lg p-4">
+                              <label className="block text-sm font-medium text-gray-700 mb-3">
+                                Text Align
+                              </label>
+                              <select
+                                value={element.textAlign || "left"}
+                                onChange={(e) =>
+                                  updateElementContent(element.id, {
+                                    textAlign: e.target.value,
+                                  })
+                                }
+                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-white text-gray-800"
+                              >
+                                <option value="left">Left</option>
+                                <option value="center">Center</option>
+                                <option value="right">Right</option>
+                                <option value="justify">Justify</option>
+                              </select>
+                            </div>
+                            <div className="bg-blue-50 rounded-lg p-4">
+                              <label className="block text-sm font-medium text-gray-700 mb-3">
+                                Color
+                              </label>
+                              <div className="flex items-center gap-3">
+                                <input
+                                  type="color"
+                                  value={element.color}
+                                  onChange={(e) =>
+                                    updateElementContent(element.id, {
+                                      color: e.target.value,
+                                    })
+                                  }
+                                  className="w-12 h-10 border border-gray-200 rounded-lg cursor-pointer"
+                                />
+                                <input
+                                  type="text"
+                                  value={element.color}
+                                  onChange={(e) =>
+                                    updateElementContent(element.id, {
+                                      color: e.target.value,
+                                    })
+                                  }
+                                  className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-white text-gray-800 font-mono"
+                                  placeholder="#000000"
+                                />
+                              </div>
+                            </div>
+                          </>
+                        )}
 
-                              <div className="grid grid-cols-2 gap-2">
-                                {/* Top Left */}
-                                <div>
-                                  <label className="text-xs text-gray-500 mb-1 block">
-                                    Top Left
+                        {element.type === "shape" && (
+                          <>
+                            <div className="bg-purple-50 rounded-lg p-4">
+                              <label className="block text-sm font-medium text-gray-700 mb-3">
+                                Shape Type
+                              </label>
+                              <select
+                                value={element.shapeType || "rect"}
+                                onChange={(e) =>
+                                  updateElementContent(element.id, {
+                                    shapeType: e.target.value as
+                                      | "rect"
+                                      | "circle"
+                                      | "ellipse"
+                                      | "triangle"
+                                      | "pentagon"
+                                      | "hexagon"
+                                      | "star",
+                                  })
+                                }
+                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all bg-white text-gray-800"
+                              >
+                                <option value="rect">Rectangle</option>
+                                <option value="circle">Circle</option>
+                                <option value="ellipse">Ellipse</option>
+                                <option value="triangle">Triangle</option>
+                                <option value="pentagon">Pentagon</option>
+                                <option value="hexagon">Hexagon</option>
+                                <option value="star">Star</option>
+                              </select>
+                            </div>
+                            <div className="bg-purple-50 rounded-lg p-4">
+                              <label className="block text-sm font-medium text-gray-700 mb-3">
+                                Background Color
+                              </label>
+                              <div className="flex items-center gap-3">
+                                <input
+                                  type="color"
+                                  value={element.backgroundColor}
+                                  onChange={(e) =>
+                                    updateElementContent(element.id, {
+                                      backgroundColor: e.target.value,
+                                    })
+                                  }
+                                  className="w-12 h-10 border border-gray-200 rounded-lg cursor-pointer"
+                                />
+                                <input
+                                  type="text"
+                                  value={element.backgroundColor}
+                                  onChange={(e) =>
+                                    updateElementContent(element.id, {
+                                      backgroundColor: e.target.value,
+                                    })
+                                  }
+                                  className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all bg-white text-gray-800 font-mono"
+                                  placeholder="#000000"
+                                />
+                              </div>
+                            </div>
+
+                            {element.shapeType === "rect" && (
+                              <div className="bg-purple-50 rounded-lg p-4">
+                                <label className="block text-sm font-medium text-gray-700 mb-3">
+                                  Border Radius
+                                </label>
+
+                                {/* Global Border Radius */}
+                                <div className="mb-4">
+                                  <label className="flex items-center gap-2 text-xs text-gray-600 mb-2">
+                                    All Corners
+                                    <span className="text-xs text-gray-500 bg-white px-2 py-1 rounded">
+                                      {element.borderRadius || 0}px
+                                    </span>
                                   </label>
                                   <input
-                                    type="number"
+                                    type="range"
                                     min="0"
                                     max="50"
-                                    value={
-                                      element.borderTopLeftRadius ??
-                                      element.borderRadius ??
-                                      0
-                                    }
-                                    onChange={(e) =>
+                                    value={element.borderRadius || 0}
+                                    onChange={(e) => {
+                                      const radius =
+                                        parseInt(e.target.value) || 0;
                                       updateElementContent(element.id, {
-                                        borderTopLeftRadius:
-                                          parseInt(e.target.value) || 0,
-                                      })
-                                    }
-                                    className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 bg-white"
+                                        borderRadius: radius,
+                                        borderTopLeftRadius: radius,
+                                        borderTopRightRadius: radius,
+                                        borderBottomLeftRadius: radius,
+                                        borderBottomRightRadius: radius,
+                                      });
+                                    }}
+                                    className="w-full accent-purple-500"
                                   />
                                 </div>
 
-                                {/* Top Right */}
-                                <div>
-                                  <label className="text-xs text-gray-500 mb-1 block">
-                                    Top Right
+                                {/* Individual Corner Controls */}
+                                <div className="space-y-2">
+                                  <label className="text-xs text-gray-600 mb-2 block">
+                                    Individual Corners:
+                                  </label>
+
+                                  <div className="grid grid-cols-2 gap-2">
+                                    {/* Top Left */}
+                                    <div>
+                                      <label className="text-xs text-gray-500 mb-1 block">
+                                        Top Left
+                                      </label>
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        max="50"
+                                        value={
+                                          element.borderTopLeftRadius ??
+                                          element.borderRadius ??
+                                          0
+                                        }
+                                        onChange={(e) =>
+                                          updateElementContent(element.id, {
+                                            borderTopLeftRadius:
+                                              parseInt(e.target.value) || 0,
+                                          })
+                                        }
+                                        className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 bg-white"
+                                      />
+                                    </div>
+
+                                    {/* Top Right */}
+                                    <div>
+                                      <label className="text-xs text-gray-500 mb-1 block">
+                                        Top Right
+                                      </label>
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        max="50"
+                                        value={
+                                          element.borderTopRightRadius ??
+                                          element.borderRadius ??
+                                          0
+                                        }
+                                        onChange={(e) =>
+                                          updateElementContent(element.id, {
+                                            borderTopRightRadius:
+                                              parseInt(e.target.value) || 0,
+                                          })
+                                        }
+                                        className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 bg-white"
+                                      />
+                                    </div>
+
+                                    {/* Bottom Left */}
+                                    <div>
+                                      <label className="text-xs text-gray-500 mb-1 block">
+                                        Bottom Left
+                                      </label>
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        max="50"
+                                        value={
+                                          element.borderBottomLeftRadius ??
+                                          element.borderRadius ??
+                                          0
+                                        }
+                                        onChange={(e) =>
+                                          updateElementContent(element.id, {
+                                            borderBottomLeftRadius:
+                                              parseInt(e.target.value) || 0,
+                                          })
+                                        }
+                                        className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 bg-white"
+                                      />
+                                    </div>
+
+                                    {/* Bottom Right */}
+                                    <div>
+                                      <label className="text-xs text-gray-500 mb-1 block">
+                                        Bottom Right
+                                      </label>
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        max="50"
+                                        value={
+                                          element.borderBottomRightRadius ??
+                                          element.borderRadius ??
+                                          0
+                                        }
+                                        onChange={(e) =>
+                                          updateElementContent(element.id, {
+                                            borderBottomRightRadius:
+                                              parseInt(e.target.value) || 0,
+                                          })
+                                        }
+                                        className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 bg-white"
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            <div className="bg-purple-50 rounded-lg p-4">
+                              <label className="block text-sm font-medium text-gray-700 mb-3">
+                                Stroke
+                              </label>
+                              <div className="space-y-3">
+                                <div className="flex items-center gap-3">
+                                  <label className="text-xs text-gray-600 w-12">
+                                    Color:
                                   </label>
                                   <input
-                                    type="number"
-                                    min="0"
-                                    max="50"
-                                    value={
-                                      element.borderTopRightRadius ??
-                                      element.borderRadius ??
-                                      0
-                                    }
+                                    type="color"
+                                    value={element.strokeColor || "#6d28d9"}
                                     onChange={(e) =>
                                       updateElementContent(element.id, {
-                                        borderTopRightRadius:
-                                          parseInt(e.target.value) || 0,
+                                        strokeColor: e.target.value,
                                       })
                                     }
-                                    className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 bg-white"
+                                    className="w-8 h-8 border border-gray-200 rounded cursor-pointer"
+                                  />
+                                  <input
+                                    type="text"
+                                    value={element.strokeColor || "#6d28d9"}
+                                    onChange={(e) =>
+                                      updateElementContent(element.id, {
+                                        strokeColor: e.target.value,
+                                      })
+                                    }
+                                    className="flex-1 px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 bg-white font-mono"
+                                    placeholder="#6d28d9"
                                   />
                                 </div>
-
-                                {/* Bottom Left */}
-                                <div>
-                                  <label className="text-xs text-gray-500 mb-1 block">
-                                    Bottom Left
+                                <div className="flex items-center gap-3">
+                                  <label className="text-xs text-gray-600 w-12">
+                                    Width:
                                   </label>
                                   <input
-                                    type="number"
+                                    type="range"
                                     min="0"
-                                    max="50"
-                                    value={
-                                      element.borderBottomLeftRadius ??
-                                      element.borderRadius ??
-                                      0
-                                    }
+                                    max="10"
+                                    value={element.strokeWidth || 0}
                                     onChange={(e) =>
                                       updateElementContent(element.id, {
-                                        borderBottomLeftRadius:
+                                        strokeWidth:
                                           parseInt(e.target.value) || 0,
                                       })
                                     }
-                                    className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 bg-white"
+                                    className="flex-1 accent-purple-500"
                                   />
+                                  <span className="text-xs text-gray-500 bg-white px-2 py-1 rounded min-w-[35px] text-center">
+                                    {element.strokeWidth || 0}px
+                                  </span>
                                 </div>
-
-                                {/* Bottom Right */}
-                                <div>
-                                  <label className="text-xs text-gray-500 mb-1 block">
-                                    Bottom Right
+                                <div className="flex items-center gap-3">
+                                  <label className="text-xs text-gray-600 w-12">
+                                    Style:
                                   </label>
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    max="50"
-                                    value={
-                                      element.borderBottomRightRadius ??
-                                      element.borderRadius ??
-                                      0
-                                    }
+                                  <select
+                                    value={element.strokeStyle || "solid"}
                                     onChange={(e) =>
                                       updateElementContent(element.id, {
-                                        borderBottomRightRadius:
-                                          parseInt(e.target.value) || 0,
+                                        strokeStyle: e.target.value as
+                                          | "solid"
+                                          | "dashed"
+                                          | "dotted",
                                       })
                                     }
-                                    className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 bg-white"
-                                  />
+                                    className="flex-1 px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 bg-white"
+                                  >
+                                    <option value="solid">Solid</option>
+                                    <option value="dashed">Dashed</option>
+                                    <option value="dotted">Dotted</option>
+                                  </select>
                                 </div>
                               </div>
                             </div>
+
+                            <div className="bg-purple-50 rounded-lg p-4">
+                              <label className="block text-sm font-medium text-gray-700 mb-3">
+                                Shape Image
+                              </label>
+                              <div className="space-y-2">
+                                <button
+                                  onClick={() =>
+                                    handleShapeImageUpload(element.id)
+                                  }
+                                  className="w-full px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm"
+                                >
+                                  {element.src
+                                    ? "Replace Image"
+                                    : "Upload Image"}
+                                </button>
+                                {element.src && (
+                                  <button
+                                    onClick={() =>
+                                      updateElementContent(element.id, {
+                                        src: undefined,
+                                      })
+                                    }
+                                    className="w-full px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors text-sm"
+                                  >
+                                    Remove Image
+                                  </button>
+                                )}
+                                <p className="text-xs text-gray-500 mt-1">
+                                  Double-click the shape to upload an image
+                                </p>
+                              </div>
+                            </div>
+                          </>
+                        )}
+
+                        {element.type === "image" && (
+                          <div className="bg-green-50 rounded-lg p-4">
+                            <label className="block text-sm font-medium text-gray-700 mb-3">
+                              Replace Image
+                            </label>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  const reader = new FileReader();
+                                  reader.onload = (e) => {
+                                    updateElementContent(element.id, {
+                                      src: e.target?.result as string,
+                                    });
+                                  };
+                                  reader.readAsDataURL(file);
+                                }
+                              }}
+                              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all bg-white text-gray-800 file:mr-3 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-sm file:bg-green-100 file:text-green-700 hover:file:bg-green-200"
+                            />
                           </div>
                         )}
 
-                        <div className="bg-purple-50 rounded-lg p-4">
-                          <label className="block text-sm font-medium text-gray-700 mb-3">
-                            Stroke
+                        {/* Layer Management Section */}
+                        <div className="bg-indigo-50 rounded-lg p-4">
+                          <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-3">
+                            Layer Order
+                            <span className="text-xs text-gray-500 bg-white px-2 py-1 rounded">
+                              Z: {element.zIndex}
+                            </span>
                           </label>
-                          <div className="space-y-3">
-                            <div className="flex items-center gap-3">
-                              <label className="text-xs text-gray-600 w-12">
-                                Color:
-                              </label>
-                              <input
-                                type="color"
-                                value={element.strokeColor || "#6d28d9"}
-                                onChange={(e) =>
-                                  updateElementContent(element.id, {
-                                    strokeColor: e.target.value,
-                                  })
-                                }
-                                className="w-8 h-8 border border-gray-200 rounded cursor-pointer"
-                              />
-                              <input
-                                type="text"
-                                value={element.strokeColor || "#6d28d9"}
-                                onChange={(e) =>
-                                  updateElementContent(element.id, {
-                                    strokeColor: e.target.value,
-                                  })
-                                }
-                                className="flex-1 px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 bg-white font-mono"
-                                placeholder="#6d28d9"
-                              />
-                            </div>
-                            <div className="flex items-center gap-3">
-                              <label className="text-xs text-gray-600 w-12">
-                                Width:
-                              </label>
-                              <input
-                                type="range"
-                                min="0"
-                                max="10"
-                                value={element.strokeWidth || 0}
-                                onChange={(e) =>
-                                  updateElementContent(element.id, {
-                                    strokeWidth: parseInt(e.target.value) || 0,
-                                  })
-                                }
-                                className="flex-1 accent-purple-500"
-                              />
-                              <span className="text-xs text-gray-500 bg-white px-2 py-1 rounded min-w-[35px] text-center">
-                                {element.strokeWidth || 0}px
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-3">
-                              <label className="text-xs text-gray-600 w-12">
-                                Style:
-                              </label>
-                              <select
-                                value={element.strokeStyle || "solid"}
-                                onChange={(e) =>
-                                  updateElementContent(element.id, {
-                                    strokeStyle: e.target.value as
-                                      | "solid"
-                                      | "dashed"
-                                      | "dotted",
-                                  })
-                                }
-                                className="flex-1 px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 bg-white"
-                              >
-                                <option value="solid">Solid</option>
-                                <option value="dashed">Dashed</option>
-                                <option value="dotted">Dotted</option>
-                              </select>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="bg-purple-50 rounded-lg p-4">
-                          <label className="block text-sm font-medium text-gray-700 mb-3">
-                            Shape Image
-                          </label>
-                          <div className="space-y-2">
+                          <div className="grid grid-cols-2 gap-2">
                             <button
-                              onClick={() => handleShapeImageUpload(element.id)}
-                              className="w-full px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm"
+                              onClick={bringToFront}
+                              className="px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm"
                             >
-                              {element.src ? "Replace Image" : "Upload Image"}
+                              ⬆️ To Front
                             </button>
-                            {element.src && (
-                              <button
-                                onClick={() =>
-                                  updateElementContent(element.id, {
-                                    src: undefined,
-                                  })
-                                }
-                                className="w-full px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors text-sm"
-                              >
-                                Remove Image
-                              </button>
-                            )}
-                            <p className="text-xs text-gray-500 mt-1">
-                              Double-click the shape to upload an image
-                            </p>
+                            <button
+                              onClick={sendToBack}
+                              className="px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm"
+                            >
+                              ⬇️ To Back
+                            </button>
+                            <button
+                              onClick={bringForward}
+                              className="px-3 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors text-sm"
+                            >
+                              ↑ Forward
+                            </button>
+                            <button
+                              onClick={sendBackward}
+                              className="px-3 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors text-sm"
+                            >
+                              ↓ Backward
+                            </button>
                           </div>
                         </div>
-                      </>
-                    )}
-
-                    {element.type === "image" && (
-                      <div className="bg-green-50 rounded-lg p-4">
-                        <label className="block text-sm font-medium text-gray-700 mb-3">
-                          Replace Image
-                        </label>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) {
-                              const reader = new FileReader();
-                              reader.onload = (e) => {
-                                updateElementContent(element.id, {
-                                  src: e.target?.result as string,
-                                });
-                              };
-                              reader.readAsDataURL(file);
-                            }
-                          }}
-                          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all bg-white text-gray-800 file:mr-3 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-sm file:bg-green-100 file:text-green-700 hover:file:bg-green-200"
-                        />
                       </div>
-                    )}
+                    );
+                  })()}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
 
-                    {/* Layer Management Section */}
-                    <div className="bg-indigo-50 rounded-lg p-4">
-                      <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-3">
-                        Layer Order
-                        <span className="text-xs text-gray-500 bg-white px-2 py-1 rounded">
-                          Z: {element.zIndex}
-                        </span>
-                      </label>
-                      <div className="grid grid-cols-2 gap-2">
-                        <button
-                          onClick={bringToFront}
-                          className="px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm"
-                        >
-                          ⬆️ To Front
-                        </button>
-                        <button
-                          onClick={sendToBack}
-                          className="px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm"
-                        >
-                          ⬇️ To Back
-                        </button>
-                        <button
-                          onClick={bringForward}
-                          className="px-3 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors text-sm"
-                        >
-                          ↑ Forward
-                        </button>
-                        <button
-                          onClick={sendBackward}
-                          className="px-3 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors text-sm"
-                        >
-                          ↓ Backward
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })()}
+      {/* Floating Bottom Toolbar - Figma Style */}
+      <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-50">
+        <div className="border border-gray-200 rounded-xl shadow-lg backdrop-blur-sm bg-white/95">
+          <div className="flex items-center px-3 py-2 gap-1">
+            {/* Main Tools Group */}
+            <div className="flex items-center bg-gray-50 rounded-lg p-1">
+              <button
+                onClick={addTextElement}
+                className="flex items-center justify-center w-8 h-8 text-gray-600 hover:bg-white hover:text-gray-900 rounded transition-all duration-150 relative group"
+                title="Add Text (T)"
+              >
+                <svg
+                  className="w-4 h-4"
+                  fill="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path d="M5 4v3h5.5v12h3V7H19V4z" />
+                </svg>
+                <div className="absolute bottom-full mb-2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                  Add Text (T)
+                </div>
+              </button>
+              <button
+                onClick={addImageElement}
+                className="flex items-center justify-center w-8 h-8 text-gray-600 hover:bg-white hover:text-gray-900 rounded transition-all duration-150 relative group"
+                title="Add Image (I)"
+              >
+                <svg
+                  className="w-4 h-4"
+                  fill="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z" />
+                </svg>
+                <div className="absolute bottom-full mb-2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                  Add Image (I)
+                </div>
+              </button>
+              <div className="relative">
+                <ShapeSelector onShapeSelect={addShapeElement} />
+              </div>
             </div>
-          )}
+
+            {/* Selection Tools - Only show when elements are selected */}
+            {(selectedElement || selectedElements.length > 0) && (
+              <>
+                <div className="w-px h-6 bg-gray-300 mx-1"></div>
+                <div className="flex items-center bg-gray-50 rounded-lg p-1">
+                  {/* Group/Ungroup for multi-selection */}
+                  {selectedElements.length >= 2 && (
+                    <button
+                      onClick={groupElements}
+                      className="flex items-center justify-center w-8 h-8 text-gray-600 hover:bg-white hover:text-gray-900 rounded transition-all duration-150 relative group"
+                      title="Group (⌘G)"
+                    >
+                      <svg
+                        className="w-4 h-4"
+                        fill="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path d="M6 2c-1.1 0-2 .9-2 2v2h2V4h2V2H6zm0 16H4v-2H2v2c0 1.1.9 2 2 2h2v-2zm8-16h2v2h2V4c0-1.1-.9-2-2-2h-2v2zm4 16v-2h2v2c0 1.1-.9 2-2 2h-2v-2h2z" />
+                      </svg>
+                      <div className="absolute bottom-full mb-2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                        Group (⌘G)
+                      </div>
+                    </button>
+                  )}
+
+                  {/* Ungroup for groups */}
+                  {selectedElement &&
+                    elements.find((el) => el.id === selectedElement)?.type ===
+                      "group" && (
+                      <button
+                        onClick={ungroupElements}
+                        className="flex items-center justify-center w-8 h-8 text-gray-600 hover:bg-white hover:text-gray-900 rounded transition-all duration-150 relative group"
+                        title="Ungroup (⌘⇧G)"
+                      >
+                        <svg
+                          className="w-4 h-4"
+                          fill="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path d="M6 2H4c-1.1 0-2 .9-2 2v2h2V4h2V2zm0 16H4v-2H2v2c0 1.1.9 2 2 2h2v-2zm8-16h2v2h2V4c0-1.1-.9-2-2-2h-2v2zm4 16v-2h2v2c0 1.1-.9 2-2 2h-2v-2h2zM8 8h8v8H8z" />
+                        </svg>
+                        <div className="absolute bottom-full mb-2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                          Ungroup (⌘⇧G)
+                        </div>
+                      </button>
+                    )}
+
+                  {/* Delete */}
+                  <button
+                    onClick={deleteElement}
+                    className="flex items-center justify-center w-8 h-8 text-gray-600 hover:bg-red-50 hover:text-red-600 rounded transition-all duration-150 relative group"
+                    title="Delete (Del)"
+                  >
+                    <svg
+                      className="w-4 h-4"
+                      fill="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
+                    </svg>
+                    <div className="absolute bottom-full mb-2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                      Delete (Del)
+                    </div>
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* Import/Export Tools */}
+            <div className="w-px h-6 bg-gray-300 mx-1"></div>
+            <div className="flex items-center bg-gray-50 rounded-lg p-1">
+              <button
+                onClick={importJSON}
+                className="flex items-center justify-center w-8 h-8 text-gray-600 hover:bg-white hover:text-gray-900 rounded transition-all duration-150 relative group"
+                title="Import JSON"
+              >
+                <svg
+                  className="w-4 h-4"
+                  fill="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path d="M9 16v-6h4l-5 5-5-5h4v6H9zm3-10c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm6 6c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2z" />
+                </svg>
+                <div className="absolute bottom-full mb-2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                  Import JSON
+                </div>
+              </button>
+              <button
+                onClick={exportJSON}
+                className="flex items-center justify-center w-8 h-8 text-gray-600 hover:bg-white hover:text-gray-900 rounded transition-all duration-150 relative group"
+                title="Export JSON"
+              >
+                <svg
+                  className="w-4 h-4"
+                  fill="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path d="M9 8v6H5l5 5 5-5h-4V8H9zm3 10c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm6-6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
+                </svg>
+                <div className="absolute bottom-full mb-2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                  Export JSON
+                </div>
+              </button>
+            </div>
+
+            {/* Status Indicator */}
+            {(selectedElements.length > 0 || selectedElement) && (
+              <>
+                <div className="w-px h-6 bg-gray-300 mx-1"></div>
+                <div className="flex items-center gap-2 px-2">
+                  {selectedElements.length > 0 ? (
+                    <div className="flex items-center gap-1 text-xs text-blue-700 bg-blue-50 px-2 py-1 rounded-full">
+                      <svg
+                        className="w-3 h-3"
+                        fill="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path d="M3 5h2V3c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2v2h2v2h-2v12c0 1.1-.9 2-2 2H7c-1.1 0-2-.9-2-2V7H3V5z" />
+                      </svg>
+                      {selectedElements.length}
+                    </div>
+                  ) : selectedElement ? (
+                    <div className="flex items-center gap-1 text-xs text-indigo-700 bg-indigo-50 px-2 py-1 rounded-full">
+                      <svg
+                        className="w-3 h-3"
+                        fill="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
+                      </svg>
+                      {elements.find((el) => el.id === selectedElement)?.type}
+                    </div>
+                  ) : null}
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
     </div>
