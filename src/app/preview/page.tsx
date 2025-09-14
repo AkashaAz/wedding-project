@@ -63,6 +63,8 @@ export default function PreviewPage() {
   const [artboardComponents, setArtboardComponents] = useState<
     LayoutComponent[]
   >([]);
+  // Store refs for each component to measure real height
+  const componentRefs = useRef<{ [id: string]: HTMLDivElement | null }>({});
   const [selectedComponent, setSelectedComponent] = useState<string | null>(
     null
   );
@@ -98,7 +100,93 @@ export default function PreviewPage() {
       .catch((err) => console.error("Failed to load layout definitions:", err));
   }, []);
 
-  // Handle adding component to artboard
+  // Function to recalculate positions based on real DOM heights
+  const recalculatePositions = React.useCallback(() => {
+    // Get current values directly to avoid recreating this function on every state change
+    const getCurrentComponents = () => artboardComponents;
+    const getCurrentZoom = () => zoom;
+
+    const currentComponents = getCurrentComponents();
+    const currentZoom = getCurrentZoom();
+
+    if (currentComponents.length <= 1) return; // No need to recalculate for 0 or 1 component
+
+    // Wait for DOM to update then recalculate
+    setTimeout(() => {
+      let currentY = 0;
+      const updatedComponents = [...currentComponents];
+
+      // Sort by current Y position to maintain order
+      updatedComponents.sort((a, b) => a.y - b.y);
+
+      updatedComponents.forEach((comp, index) => {
+        if (index === 0) {
+          // First component stays at top
+          comp.y = 0;
+          const domElement = componentRefs.current[comp.id];
+          if (domElement) {
+            currentY = domElement.offsetHeight / (currentZoom / 100); // No gap
+          } else {
+            currentY = 300; // Fallback
+          }
+        } else {
+          // Position subsequent components below previous ones
+          comp.y = currentY;
+          const domElement = componentRefs.current[comp.id];
+          if (domElement) {
+            currentY += domElement.offsetHeight / (currentZoom / 100); // No gap
+          } else {
+            currentY += 300; // Fallback
+          }
+        }
+      });
+
+      setArtboardComponents(updatedComponents);
+    }, 100); // Small delay to ensure DOM is updated
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Debounced version for performance
+  const debouncedRecalculatePositions = React.useMemo(() => {
+    let timeoutId: NodeJS.Timeout;
+    return () => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        recalculatePositions();
+      }, 200);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Recalculate positions when zoom changes (but not for prop changes)
+  useEffect(() => {
+    // Use current values from refs to avoid unnecessary re-runs
+    if (artboardComponents.length > 1) {
+      // Call recalculate directly to avoid debounce function dependency
+      setTimeout(() => {
+        let currentY = 0;
+        const updatedComponents = [...artboardComponents];
+        updatedComponents.sort((a, b) => a.y - b.y);
+
+        let hasChanges = false;
+        updatedComponents.forEach((comp) => {
+          const element = componentRefs.current[comp.id];
+          if (element) {
+            const height = element.offsetHeight;
+            if (comp.y !== currentY) {
+              hasChanges = true;
+              comp.y = currentY;
+            }
+            currentY += height;
+          }
+        });
+
+        if (hasChanges) {
+          setArtboardComponents([...updatedComponents]);
+        }
+      }, 100);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [zoom]); // Only depend on zoom // Handle adding component to artboard
+
   const addComponentToArtboard = (componentName: string) => {
     const definition = layoutDefinitions.find(
       (def) => def.componentName === componentName
@@ -111,23 +199,36 @@ export default function PreviewPage() {
       defaultProps[key] = schema.default;
     });
 
-    // Always fit to artboard width, stack vertically
+    // Always fit to artboard width, stack vertically (find bottom-most y)
     const getSmartPosition = () => {
-      const startY = 0;
       if (artboardComponents.length === 0) {
-        return { x: 0, y: startY };
+        return { x: 0, y: 0 };
       }
-      const lastComponent = artboardComponents[artboardComponents.length - 1];
-      const estimatedHeight =
-        lastComponent.height === "auto"
-          ? 300
-          : lastComponent.height.includes("%")
-          ? (parseInt(lastComponent.height) / 100) * artboardSize.height
-          : parseInt(lastComponent.height) || 300;
-      return {
-        x: 0,
-        y: lastComponent.y + estimatedHeight + 24, // 24px vertical gap
-      };
+      // Find the bottom-most y + height of all components using real DOM heights
+      let maxBottom = 0;
+      for (const comp of artboardComponents) {
+        let compHeight = 0;
+        const domElement = componentRefs.current[comp.id];
+
+        if (domElement) {
+          // Use actual DOM height if available
+          compHeight = domElement.offsetHeight / (zoom / 100); // Adjust for zoom
+        } else {
+          // Fallback to estimated height if DOM element not yet available
+          if (comp.height === "auto") {
+            compHeight = 300; // fallback estimate for auto
+          } else if (
+            typeof comp.height === "string" &&
+            comp.height.includes("%")
+          ) {
+            compHeight = (parseInt(comp.height) / 100) * artboardSize.height;
+          } else {
+            compHeight = parseInt(comp.height as string) || 300;
+          }
+        }
+        maxBottom = Math.max(maxBottom, comp.y + compHeight);
+      }
+      return { x: 0, y: maxBottom };
     };
 
     const position = getSmartPosition();
@@ -149,33 +250,36 @@ export default function PreviewPage() {
     setArtboardComponents((prev) => [...prev, newComponent]);
     setNextZIndex((prev) => prev + 1);
     setSelectedComponent(newComponent.id);
+
+    // Use debounced recalculation for better performance
+    debouncedRecalculatePositions();
   };
 
   // Handle component selection and drag start
-  const handleComponentMouseDown = (
-    componentId: string,
-    e: React.MouseEvent
-  ) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const handleComponentMouseDown = React.useCallback(
+    (componentId: string, e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
 
-    setSelectedComponent(componentId);
+      setSelectedComponent(componentId);
 
-    const component = artboardComponents.find(
-      (comp) => comp.id === componentId
-    );
-    if (!component) return;
+      const component = artboardComponents.find(
+        (comp) => comp.id === componentId
+      );
+      if (!component) return;
 
-    // Start drag tracking but don't set dragging to true yet
-    dragRef.current = {
-      isDragging: false, // Will be set to true when mouse moves enough
-      startX: e.clientX,
-      startY: e.clientY,
-      componentId,
-      startComponentX: component.x,
-      startComponentY: component.y,
-    };
-  };
+      // Start drag tracking but don't set dragging to true yet
+      dragRef.current = {
+        isDragging: false, // Will be set to true when mouse moves enough
+        startX: e.clientX,
+        startY: e.clientY,
+        componentId,
+        startComponentX: component.x,
+        startComponentY: component.y,
+      };
+    },
+    [artboardComponents]
+  );
 
   // Handle mouse move for dragging
   // Only allow vertical drag to reorder layouts
@@ -245,7 +349,7 @@ export default function PreviewPage() {
               : newArr[i].height.includes("%")
               ? (parseInt(newArr[i].height) / 100) * artboardSize.height
               : parseInt(newArr[i].height) || 300;
-          y += h + 24;
+          y += h; // No gap
         }
         setArtboardComponents(newArr);
       }
@@ -272,33 +376,37 @@ export default function PreviewPage() {
   }, [handleMouseMove, handleMouseUp]);
 
   // Handle component selection
-  const handleComponentClick = (componentId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    // Only handle click if we're not in the middle of dragging
-    if (!dragRef.current.isDragging) {
-      setSelectedComponent(componentId);
-    }
-  };
+  const handleComponentClick = React.useCallback(
+    (componentId: string, e: React.MouseEvent) => {
+      e.stopPropagation();
+      // Only handle click if we're not in the middle of dragging
+      if (!dragRef.current.isDragging) {
+        setSelectedComponent(componentId);
+      }
+    },
+    []
+  );
 
   // Handle artboard click (deselect)
-  const handleArtboardClick = () => {
+  const handleArtboardClick = React.useCallback(() => {
     setSelectedComponent(null);
-  };
+  }, []);
 
-  // Update component props
-  const updateComponentProps = (
-    componentId: string,
-    propKey: string,
-    value: unknown
-  ) => {
-    setArtboardComponents((prev) =>
-      prev.map((comp) =>
-        comp.id === componentId
-          ? { ...comp, props: { ...comp.props, [propKey]: value } }
-          : comp
-      )
-    );
-  };
+  // Update component props with optimized re-rendering and loading state
+  const updateComponentProps = React.useCallback(
+    (componentId: string, propKey: string, value: unknown) => {
+      // Simple single state update - no loading states
+      setArtboardComponents((prev) => {
+        const updated = prev.map((comp) =>
+          comp.id === componentId
+            ? { ...comp, props: { ...comp.props, [propKey]: value } }
+            : comp
+        );
+        return updated;
+      });
+    },
+    []
+  );
 
   // Delete component
   const deleteComponent = (componentId: string) => {
@@ -306,6 +414,11 @@ export default function PreviewPage() {
       prev.filter((comp) => comp.id !== componentId)
     );
     setSelectedComponent(null);
+
+    // Recalculate positions after deletion to close gaps
+    setTimeout(() => {
+      debouncedRecalculatePositions();
+    }, 50); // Small delay to ensure state is updated
   };
 
   // Export artboard as JSON
@@ -456,14 +569,148 @@ ${propTypes}
     }
   };
 
-  // Render component based on type
-  const renderComponent = (component: LayoutComponent) => {
+  // Memoized component wrapper to prevent cross-component re-renders
+  const LayoutComponentWrapper = React.memo(
+    ({
+      component,
+      isSelected,
+      isDragging,
+      dragComponentId,
+      zoom,
+      artboardSize,
+      onComponentClick,
+      onComponentMouseDown,
+    }: {
+      component: LayoutComponent;
+      isSelected: boolean;
+      isDragging: boolean;
+      dragComponentId: string | null;
+      zoom: number;
+      artboardSize: { width: number; height: number };
+      onComponentClick: (id: string, e: React.MouseEvent) => void;
+      onComponentMouseDown: (id: string, e: React.MouseEvent) => void;
+    }) => {
+      const ComponentType =
+        COMPONENT_MAP[component.componentName as keyof typeof COMPONENT_MAP];
+      if (!ComponentType) return null;
+
+      return (
+        <div
+          ref={(el) => {
+            componentRefs.current[component.id] = el;
+          }}
+          onClick={(e) => onComponentClick(component.id, e)}
+          onMouseDown={(e) => onComponentMouseDown(component.id, e)}
+          className={`absolute transition-all select-none ${
+            isSelected
+              ? "ring-2 ring-blue-500 ring-opacity-50"
+              : "hover:ring-1 hover:ring-gray-300"
+          } ${
+            isDragging && dragComponentId === component.id
+              ? "cursor-grabbing shadow-lg scale-105 ring-4 ring-blue-400 ring-opacity-30"
+              : isSelected
+              ? "cursor-move"
+              : "cursor-pointer"
+          }`}
+          style={{
+            left: 0,
+            top: `${component.y * (zoom / 100)}px`,
+            width: "100%",
+            height:
+              component.height === "auto"
+                ? "auto"
+                : component.height.includes("%")
+                ? `${
+                    (parseInt(component.height) / 100) *
+                    artboardSize.height *
+                    (zoom / 100)
+                  }px`
+                : component.height,
+            zIndex: component.zIndex,
+            fontSize: `${zoom / 100}em`,
+          }}
+        >
+          {/* Component content */}
+          <div className="w-full h-full" style={{ userSelect: "none" }}>
+            <ComponentType {...component.props} />
+          </div>
+
+          {/* Selection indicators */}
+          {isSelected && (
+            <div className="absolute -bottom-6 left-0 bg-blue-500 text-white text-xs px-2 py-1 rounded shadow-md">
+              {component.componentName}
+            </div>
+          )}
+        </div>
+      );
+    },
+    (prevProps, nextProps) => {
+      console.log(`🚨 MEMO COMPARISON CALLED for ${nextProps.component.id}`);
+
+      // Compare only data props that actually matter, skip function props
+      const prevComponentProps = prevProps.component.props;
+      const nextComponentProps = nextProps.component.props;
+
+      // Compare individual prop values instead of JSON.stringify (which fails on functions)
+      const propsChanged =
+        Object.keys(nextComponentProps).some((key) => {
+          // Skip function props in comparison
+          if (typeof nextComponentProps[key] === "function") return false;
+          return prevComponentProps[key] !== nextComponentProps[key];
+        }) ||
+        Object.keys(prevComponentProps).some((key) => {
+          // Check if prev props has keys that next props doesn't have
+          if (typeof prevComponentProps[key] === "function") return false;
+          return !(key in nextComponentProps);
+        });
+
+      const positionChanged = prevProps.component.y !== nextProps.component.y;
+      const selectionChanged = prevProps.isSelected !== nextProps.isSelected;
+      const dragChanged =
+        prevProps.isDragging !== nextProps.isDragging ||
+        prevProps.dragComponentId !== nextProps.dragComponentId;
+      const zoomChanged = prevProps.zoom !== nextProps.zoom;
+
+      const shouldUpdate =
+        propsChanged ||
+        positionChanged ||
+        selectionChanged ||
+        dragChanged ||
+        zoomChanged;
+
+      console.log(
+        `🔍 MEMO COMPARISON - ${nextProps.component.componentName} (${nextProps.component.id}):`,
+        {
+          propsChanged,
+          positionChanged,
+          selectionChanged,
+          dragChanged,
+          zoomChanged,
+          shouldUpdate,
+        }
+      );
+
+      if (propsChanged) {
+        console.log(`📊 PROPS DIFF - ${nextProps.component.id}:`, {
+          prev: prevComponentProps,
+          next: nextComponentProps,
+        });
+      }
+
+      return !shouldUpdate;
+    }
+  );
+
+  LayoutComponentWrapper.displayName = "LayoutComponentWrapper";
+
+  // Render component based on type (simplified for now to fix issues)
+  const renderComponent = React.useCallback((component: LayoutComponent) => {
     const ComponentType =
       COMPONENT_MAP[component.componentName as keyof typeof COMPONENT_MAP];
     if (!ComponentType) return null;
 
     return <ComponentType {...component.props} />;
-  };
+  }, []);
 
   return (
     <div className="relative min-h-screen flex items-center justify-center bg-gradient-to-br from-[#e9ecf3] to-[#dbe6f6]">
@@ -656,84 +903,26 @@ ${propTypes}
                   className="relative mx-auto w-full"
                   style={{
                     minHeight: "400px",
-                    height:
-                      artboardComponents.length > 0
-                        ? `${Math.max(
-                            400,
-                            artboardComponents.reduce((maxY, comp) => {
-                              const compHeight =
-                                comp.height === "auto"
-                                  ? 300
-                                  : comp.height.includes("%")
-                                  ? (parseInt(comp.height) / 100) *
-                                    artboardSize.height
-                                  : parseInt(comp.height) || 300;
-                              return Math.max(maxY, comp.y + compHeight + 50);
-                            }, 400)
-                          )}px`
-                        : "400px",
-                    transform: `scale(1)`,
-                    transformOrigin: "top left",
                   }}
                 >
-                  {/* Components on artboard */}
-                  {artboardComponents.map((component) => (
-                    <div
-                      key={component.id}
-                      onClick={(e) => handleComponentClick(component.id, e)}
-                      onMouseDown={(e) =>
-                        handleComponentMouseDown(component.id, e)
-                      }
-                      className={`absolute transition-all select-none ${
-                        selectedComponent === component.id
-                          ? "ring-2 ring-blue-500 ring-opacity-50"
-                          : "hover:ring-1 hover:ring-gray-300"
-                      } ${
-                        isDragging &&
-                        dragRef.current.componentId === component.id
-                          ? "cursor-grabbing shadow-lg scale-105 ring-4 ring-blue-400 ring-opacity-30"
-                          : selectedComponent === component.id
-                          ? "cursor-move"
-                          : "cursor-pointer"
-                      }`}
-                      style={{
-                        left: 0,
-                        top: `${component.y * (zoom / 100)}px`,
-                        width: "100%",
-                        height:
-                          component.height === "auto"
-                            ? "auto"
-                            : component.height.includes("%")
-                            ? `${
-                                (parseInt(component.height) / 100) *
-                                artboardSize.height *
-                                (zoom / 100)
-                              }px`
-                            : component.height,
-                        zIndex: component.zIndex,
-                        fontSize: `${zoom / 100}em`,
-                      }}
-                    >
-                      {/* Component content - allow pointer events for clicking but prevent text selection */}
-                      <div
-                        className="w-full h-full"
-                        style={{ userSelect: "none" }}
-                      >
-                        {renderComponent(component)}
-                      </div>
+                  {artboardComponents.map((component) => {
+                    // Use stable key to prevent unnecessary unmounting
+                    const stableKey = `${component.componentName}-${component.id}`;
 
-                      {/* Selection indicators and controls */}
-                      {selectedComponent === component.id && (
-                        <>
-                          {/* Component label */}
-                          <div className="absolute -bottom-6 left-0 bg-blue-500 text-white text-xs px-2 py-1 rounded shadow-md">
-                            {component.componentName}
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  ))}
-
+                    return (
+                      <LayoutComponentWrapper
+                        key={stableKey}
+                        component={component}
+                        isSelected={selectedComponent === component.id}
+                        isDragging={isDragging}
+                        dragComponentId={dragRef.current.componentId}
+                        zoom={zoom}
+                        artboardSize={artboardSize}
+                        onComponentClick={handleComponentClick}
+                        onComponentMouseDown={handleComponentMouseDown}
+                      />
+                    );
+                  })}
                   {/* Empty state */}
                   {artboardComponents.length === 0 && (
                     <div className="absolute inset-0 flex items-center justify-center text-gray-400">
@@ -904,17 +1093,52 @@ ${propTypes}
                                   accept="image/*"
                                   onChange={(e) => {
                                     const file = e.target.files?.[0];
+                                    console.log(
+                                      `📁 FILE INPUT CHANGE - Component: ${component.id}, File:`,
+                                      file?.name
+                                    );
+
                                     if (file) {
-                                      const reader = new FileReader();
-                                      reader.onload = (event) => {
-                                        updateComponentProps(
-                                          component.id,
-                                          propKey,
-                                          event.target?.result as string
+                                      console.log(
+                                        `🔄 READING FILE - Size: ${file.size}, Type: ${file.type}`
+                                      );
+                                      const tempReader = new FileReader();
+
+                                      tempReader.onload = (event) => {
+                                        const result = event.target
+                                          ?.result as string;
+                                        console.log(
+                                          `📖 FILE READ COMPLETE - Result length: ${result?.length}, Component: ${component.id}`
+                                        );
+
+                                        if (result) {
+                                          console.log(
+                                            `⏰ SETTING TIMEOUT for ${component.id}.${propKey}`
+                                          );
+                                          // Use a timeout to ensure the DOM is stable
+                                          setTimeout(() => {
+                                            console.log(
+                                              `🎯 CALLING updateComponentProps for ${component.id}.${propKey}`
+                                            );
+                                            updateComponentProps(
+                                              component.id,
+                                              propKey,
+                                              result
+                                            );
+                                          }, 50);
+                                        }
+                                      };
+
+                                      tempReader.onerror = () => {
+                                        console.error(
+                                          `❌ FILE READ ERROR for ${component.id}`
                                         );
                                       };
-                                      reader.readAsDataURL(file);
+
+                                      tempReader.readAsDataURL(file);
                                     }
+                                    // Clear file input to allow re-uploading same file
+                                    e.target.value = "";
                                   }}
                                   className="w-full text-sm text-gray-500 file:mr-3 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-sm file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                                 />

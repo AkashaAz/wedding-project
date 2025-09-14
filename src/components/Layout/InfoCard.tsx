@@ -16,7 +16,7 @@ export default function InfoCard({
   description = "Card description goes here",
   iconColor = "text-blue-600",
   backgroundColor = "bg-white",
-  titleColor = "text-gray-800",
+  titleColor = "text-gray-900",
   descriptionColor = "text-gray-600",
 }: InfoCardProps) {
   return (
@@ -30,7 +30,15 @@ export default function InfoCard({
           alt={title}
           fill
           className="object-cover"
-          unoptimized
+          sizes="100vw"
+          priority={image.includes("data:") || !image.includes("placeholder")}
+          unoptimized={image.includes("data:")} // Disable optimization for data URLs to prevent flickering
+          placeholder={image.includes("data:") ? "empty" : "blur"}
+          blurDataURL={
+            image.includes("data:")
+              ? undefined
+              : "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCdABmX/9k="
+          }
         />
       </div>
 

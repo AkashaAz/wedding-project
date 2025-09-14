@@ -48,7 +48,8 @@ export default function GalleryCard({
               alt={`Gallery image ${index + 1}`}
               fill
               className="object-cover hover:scale-105 transition-transform duration-300"
-              unoptimized
+              sizes="(max-width: 768px) 50vw, 25vw"
+              priority={index < 2} // Prioritize first 2 images
             />
           </div>
         ))}
