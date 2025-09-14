@@ -5,6 +5,7 @@ import HeroCard from "../../components/Layout/HeroCard";
 import InfoCard from "../../components/Layout/InfoCard";
 import GalleryCard from "../../components/Layout/GalleryCard";
 import { FullScreenHero } from "../../components/Layout/FullScreenHero";
+import { ParallaxFullScreenHero } from "../../components/Layout/ParallaxFullScreenHero";
 import { WeddingInvitation } from "../../components/Layout/WeddingInvitation";
 
 // Types for layout components
@@ -45,6 +46,7 @@ interface LayoutDefinition {
 const COMPONENT_MAP = {
   WeddingInvitation,
   FullScreenHero,
+  ParallaxFullScreenHero,
   HeroCard,
   InfoCard,
   GalleryCard,
