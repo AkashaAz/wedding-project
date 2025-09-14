@@ -793,28 +793,6 @@ ${propTypes}
                       {/* Selection indicators and controls */}
                       {selectedComponent === component.id && (
                         <>
-                          {/* Drag handle */}
-                          <div className="absolute -top-3 -left-3 w-6 h-6 bg-blue-500 rounded-full cursor-move flex items-center justify-center shadow-md hover:bg-blue-600 transition-colors">
-                            <svg
-                              className="w-3 h-3 text-white"
-                              fill="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path d="M13 6v5h5V9.5l3.5 3.5-3.5 3.5V14h-5v5h1.5L10.5 22.5 7 19h1.5v-5H3v1.5L-.5 12 3 8.5V10h5.5V5H7l3.5-3.5L14 5h-1z" />
-                            </svg>
-                          </div>
-
-                          {/* Delete button */}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              deleteComponent(component.id);
-                            }}
-                            className="absolute -top-3 -right-3 w-6 h-6 bg-red-500 text-white rounded-full text-xs hover:bg-red-600 transition-colors shadow-md flex items-center justify-center"
-                          >
-                            ×
-                          </button>
-
                           {/* Component label */}
                           <div className="absolute -bottom-6 left-0 bg-blue-500 text-white text-xs px-2 py-1 rounded shadow-md">
                             {component.componentName}
@@ -842,124 +820,66 @@ ${propTypes}
         </div>
         {/* Properties Panel */}
         {selectedComponent && !previewMode && (
-          <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-white rounded-xl shadow-2xl border border-gray-200 p-6 max-w-md w-full mx-4 z-50">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-gray-900">Properties</h3>
-              <button
-                onClick={() => setSelectedComponent(null)}
-                className="p-1 hover:bg-gray-100 rounded-md transition-colors"
-              >
-                <svg
-                  className="w-5 h-5 text-gray-500"
-                  fill="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    d="M6 18L18 6M6 6l12 12"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </button>
-            </div>
+          <div
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/10"
+            onClick={() => setSelectedComponent(null)}
+          >
+            <div
+              className="bg-white/80 backdrop-blur-xl rounded-2xl shadow-2xl border border-gray-200 p-6 max-w-md w-full mx-4"
+              style={{ boxShadow: "0 8px 32px 0 rgba(31,38,135,0.12)" }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-gray-900">Properties</h3>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setSelectedComponent(null)}
+                    className="p-1 hover:bg-gray-100 rounded-md transition-colors"
+                  >
+                    <svg
+                      className="w-5 h-5 text-gray-500"
+                      fill="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        d="M6 18L18 6M6 6l12 12"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => deleteComponent(selectedComponent!)}
+                    className="p-1 bg-red-500 hover:bg-red-600 text-white rounded-md transition-colors text-sm font-semibold"
+                  >
+                    Delete Layout
+                  </button>
+                </div>
+              </div>
 
-            {(() => {
-              const component = artboardComponents.find(
-                (comp) => comp.id === selectedComponent
-              );
-              const definition = layoutDefinitions.find(
-                (def) => def.componentName === component?.componentName
-              );
+              {(() => {
+                const component = artboardComponents.find(
+                  (comp) => comp.id === selectedComponent
+                );
+                const definition = layoutDefinitions.find(
+                  (def) => def.componentName === component?.componentName
+                );
 
-              if (!component || !definition) return null;
+                if (!component || !definition) return null;
 
-              return (
-                <div className="max-h-64 overflow-y-auto space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
-                    {Object.entries(definition.propsSchema).map(
-                      ([propKey, schema]) => (
-                        <div key={propKey} className="space-y-1">
-                          <label className="block text-xs font-medium text-gray-600">
-                            {schema.label}
-                          </label>
+                return (
+                  <div className="max-h-64 overflow-y-auto space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      {Object.entries(definition.propsSchema).map(
+                        ([propKey, schema]) => (
+                          <div key={propKey} className="space-y-1">
+                            <label className="block text-xs font-medium text-gray-600">
+                              {schema.label}
+                            </label>
 
-                          {schema.type === "text" && (
-                            <input
-                              type="text"
-                              value={String(component.props[propKey] || "")}
-                              onChange={(e) =>
-                                updateComponentProps(
-                                  component.id,
-                                  propKey,
-                                  e.target.value
-                                )
-                              }
-                              className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                            />
-                          )}
-
-                          {schema.type === "textarea" && (
-                            <textarea
-                              value={String(component.props[propKey] || "")}
-                              onChange={(e) =>
-                                updateComponentProps(
-                                  component.id,
-                                  propKey,
-                                  e.target.value
-                                )
-                              }
-                              rows={2}
-                              className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 col-span-2"
-                            />
-                          )}
-
-                          {schema.type === "select" && schema.options && (
-                            <select
-                              value={String(
-                                component.props[propKey] || schema.default
-                              )}
-                              onChange={(e) =>
-                                updateComponentProps(
-                                  component.id,
-                                  propKey,
-                                  e.target.value
-                                )
-                              }
-                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            >
-                              {schema.options.map((option: string) => (
-                                <option key={option} value={option}>
-                                  {option
-                                    .replace(/^(bg-|text-)/, "")
-                                    .replace(/-/g, " ")}
-                                </option>
-                              ))}
-                            </select>
-                          )}
-
-                          {schema.type === "number" && (
-                            <input
-                              type="number"
-                              min={schema.min || 0}
-                              max={schema.max || 100}
-                              value={Number(
-                                component.props[propKey] || schema.default
-                              )}
-                              onChange={(e) =>
-                                updateComponentProps(
-                                  component.id,
-                                  propKey,
-                                  parseInt(e.target.value)
-                                )
-                              }
-                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            />
-                          )}
-
-                          {schema.type === "image" && (
-                            <div className="space-y-2">
+                            {schema.type === "text" && (
                               <input
                                 type="text"
                                 value={String(component.props[propKey] || "")}
@@ -970,37 +890,112 @@ ${propTypes}
                                     e.target.value
                                   )
                                 }
-                                placeholder="Image URL"
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-black bg-white/90"
                               />
+                            )}
+
+                            {schema.type === "textarea" && (
+                              <textarea
+                                value={String(component.props[propKey] || "")}
+                                onChange={(e) =>
+                                  updateComponentProps(
+                                    component.id,
+                                    propKey,
+                                    e.target.value
+                                  )
+                                }
+                                rows={2}
+                                className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 col-span-2 text-black bg-white/90"
+                              />
+                            )}
+
+                            {schema.type === "select" && schema.options && (
+                              <select
+                                value={String(
+                                  component.props[propKey] || schema.default
+                                )}
+                                onChange={(e) =>
+                                  updateComponentProps(
+                                    component.id,
+                                    propKey,
+                                    e.target.value
+                                  )
+                                }
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-black bg-white/90"
+                              >
+                                {schema.options.map((option: string) => (
+                                  <option key={option} value={option}>
+                                    {option
+                                      .replace(/^(bg-|text-)/, "")
+                                      .replace(/-/g, " ")}
+                                  </option>
+                                ))}
+                              </select>
+                            )}
+
+                            {schema.type === "number" && (
                               <input
-                                type="file"
-                                accept="image/*"
-                                onChange={(e) => {
-                                  const file = e.target.files?.[0];
-                                  if (file) {
-                                    const reader = new FileReader();
-                                    reader.onload = (event) => {
-                                      updateComponentProps(
-                                        component.id,
-                                        propKey,
-                                        event.target?.result as string
-                                      );
-                                    };
-                                    reader.readAsDataURL(file);
-                                  }
-                                }}
-                                className="w-full text-sm text-gray-500 file:mr-3 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-sm file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                                type="number"
+                                min={schema.min || 0}
+                                max={schema.max || 100}
+                                value={Number(
+                                  component.props[propKey] || schema.default
+                                )}
+                                onChange={(e) =>
+                                  updateComponentProps(
+                                    component.id,
+                                    propKey,
+                                    parseInt(e.target.value)
+                                  )
+                                }
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-black bg-white/90"
                               />
-                            </div>
-                          )}
-                        </div>
-                      )
-                    )}
+                            )}
+
+                            {schema.type === "image" && (
+                              <div className="space-y-2">
+                                <input
+                                  type="text"
+                                  value={String(component.props[propKey] || "")}
+                                  onChange={(e) =>
+                                    updateComponentProps(
+                                      component.id,
+                                      propKey,
+                                      e.target.value
+                                    )
+                                  }
+                                  placeholder="Image URL"
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-black bg-white/90"
+                                />
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) {
+                                      const reader = new FileReader();
+                                      reader.onload = (event) => {
+                                        updateComponentProps(
+                                          component.id,
+                                          propKey,
+                                          event.target?.result as string
+                                        );
+                                      };
+                                      reader.readAsDataURL(file);
+                                    }
+                                  }}
+                                  className="w-full text-sm text-gray-500 file:mr-3 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-sm file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                                />
+                              </div>
+                            )}
+                          </div>
+                        )
+                      )}
+                    </div>
                   </div>
-                </div>
-              );
-            })()}
+                );
+              })()}
+            </div>
           </div>
         )}
       </div>
