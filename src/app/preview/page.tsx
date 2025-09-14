@@ -144,16 +144,12 @@ export default function PreviewPage() {
       defaultProps[key] = schema.default;
     });
 
-    // Calculate smart positioning to avoid overlap
+    // Always fit to artboard width, stack vertically
     const getSmartPosition = () => {
-      const startX = 50;
-      const startY = 50;
-
+      const startY = 0;
       if (artboardComponents.length === 0) {
-        return { x: startX, y: startY };
+        return { x: 0, y: startY };
       }
-
-      // Try to position below the last component
       const lastComponent = artboardComponents[artboardComponents.length - 1];
       const estimatedHeight =
         lastComponent.height === "auto"
@@ -161,10 +157,9 @@ export default function PreviewPage() {
           : lastComponent.height.includes("%")
           ? (parseInt(lastComponent.height) / 100) * artboardSize.height
           : parseInt(lastComponent.height) || 300;
-
       return {
-        x: startX,
-        y: lastComponent.y + estimatedHeight + 50,
+        x: 0,
+        y: lastComponent.y + estimatedHeight + 24, // 24px vertical gap
       };
     };
 
@@ -173,12 +168,13 @@ export default function PreviewPage() {
     const newComponent: LayoutComponent = {
       id: `${componentName}_${Date.now()}`,
       componentName,
-      x: position.x,
+      x: 0,
       y: position.y,
-      width: definition.defaultLayout.width.includes("%")
-        ? definition.defaultLayout.width
-        : "50%",
-      height: definition.defaultLayout.height === "auto" ? "auto" : "40%",
+      width: "100%",
+      height:
+        definition.defaultLayout.height === "auto"
+          ? "auto"
+          : definition.defaultLayout.height,
       props: defaultProps,
       zIndex: nextZIndex,
     };
@@ -215,65 +211,79 @@ export default function PreviewPage() {
   };
 
   // Handle mouse move for dragging
+  // Only allow vertical drag to reorder layouts
   const handleMouseMove = React.useCallback(
     (e: MouseEvent) => {
       if (!dragRef.current.componentId) return;
 
-      // Check if we should start dragging (mouse moved more than 5px)
-      const deltaX = e.clientX - dragRef.current.startX;
+      // Only vertical drag
       const deltaY = e.clientY - dragRef.current.startY;
-      const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+      const distance = Math.abs(deltaY);
 
       // Only start dragging if mouse moved enough
       if (!dragRef.current.isDragging && distance > 5) {
         dragRef.current.isDragging = true;
         setIsDragging(true);
       }
-
       if (!dragRef.current.isDragging) return;
 
-      const scaledDeltaX = deltaX / (zoom / 100);
       const scaledDeltaY = deltaY / (zoom / 100);
-
       const component = artboardComponents.find(
         (comp) => comp.id === dragRef.current.componentId
       );
       if (!component) return;
 
-      // Calculate component dimensions
-      const componentWidth = component.width.includes("%")
-        ? (parseInt(component.width) / 100) * artboardSize.width
-        : parseInt(component.width) || 200;
-      const componentHeight = component.height.includes("%")
-        ? (parseInt(component.height) / 100) * artboardSize.height
-        : parseInt(component.height) || 100;
+      // Find current index
+      const currentIndex = artboardComponents.findIndex(
+        (comp) => comp.id === dragRef.current.componentId
+      );
+      if (currentIndex === -1) return;
 
-      // Constrain to artboard bounds - use dynamic size
-      const currentDynamicSize = calculateDynamicArtboardSize();
-      const newX = Math.max(
-        0,
-        Math.min(
-          currentDynamicSize.width - componentWidth,
-          dragRef.current.startComponentX + scaledDeltaX
-        )
-      );
-      const newY = Math.max(
-        0,
-        Math.min(
-          currentDynamicSize.height - componentHeight,
-          dragRef.current.startComponentY + scaledDeltaY
-        )
-      );
-
-      setArtboardComponents((prev) =>
-        prev.map((comp) =>
-          comp.id === dragRef.current.componentId
-            ? { ...comp, x: newX, y: newY }
-            : comp
-        )
-      );
+      // Calculate new index based on mouse position
+      let newIndex = currentIndex;
+      const compHeight =
+        component.height === "auto"
+          ? 200
+          : component.height.includes("%")
+          ? (parseInt(component.height) / 100) * artboardSize.height
+          : parseInt(component.height) || 200;
+      const newY =
+        dragRef.current.startComponentY + scaledDeltaY + compHeight / 2;
+      for (let i = 0; i < artboardComponents.length; i++) {
+        if (i === currentIndex) continue;
+        const c = artboardComponents[i];
+        const cHeight =
+          c.height === "auto"
+            ? 200
+            : c.height.includes("%")
+            ? (parseInt(c.height) / 100) * artboardSize.height
+            : parseInt(c.height) || 200;
+        if (newY < c.y + cHeight / 2) {
+          newIndex = i;
+          break;
+        }
+      }
+      if (newIndex !== currentIndex) {
+        // Reorder
+        const newArr = [...artboardComponents];
+        const [moved] = newArr.splice(currentIndex, 1);
+        newArr.splice(newIndex, 0, moved);
+        // Recalculate y for all
+        let y = 0;
+        for (let i = 0; i < newArr.length; i++) {
+          newArr[i] = { ...newArr[i], x: 0, y };
+          const h =
+            newArr[i].height === "auto"
+              ? 300
+              : newArr[i].height.includes("%")
+              ? (parseInt(newArr[i].height) / 100) * artboardSize.height
+              : parseInt(newArr[i].height) || 300;
+          y += h + 24;
+        }
+        setArtboardComponents(newArr);
+      }
     },
-    [zoom, artboardComponents, artboardSize, calculateDynamicArtboardSize]
+    [zoom, artboardComponents, artboardSize]
   );
 
   // Handle mouse up to end dragging
@@ -703,10 +713,10 @@ ${propTypes}
             </div>
 
             {/* Artboard */}
-            <div className="overflow-auto border-2 border-white/30 bg-white/40 p-4 rounded-2xl">
+            <div className="overflow-auto p-4 min-h-[500px] max-h-[70vh]">
               {previewMode ? (
                 /* Preview Mode - Natural Flow Layout */
-                <div className="max-w-4xl mx-auto bg-white/70 rounded-2xl shadow-lg overflow-hidden min-h-screen">
+                <div className="max-w-4xl mx-auto rounded-2xl overflow-hidden min-h-[400px]">
                   {artboardComponents
                     .sort((a, b) => a.zIndex - b.zIndex)
                     .map((component) => (
@@ -730,10 +740,25 @@ ${propTypes}
                 <div
                   ref={artboardRef}
                   onClick={handleArtboardClick}
-                  className="relative bg-white/80 shadow-lg mx-auto rounded-2xl"
+                  className="relative mx-auto w-full"
                   style={{
-                    width: `${dynamicArtboardSize.width * (zoom / 100)}px`,
-                    height: `${dynamicArtboardSize.height * (zoom / 100)}px`,
+                    minHeight: "400px",
+                    height:
+                      artboardComponents.length > 0
+                        ? `${Math.max(
+                            400,
+                            artboardComponents.reduce((maxY, comp) => {
+                              const compHeight =
+                                comp.height === "auto"
+                                  ? 300
+                                  : comp.height.includes("%")
+                                  ? (parseInt(comp.height) / 100) *
+                                    artboardSize.height
+                                  : parseInt(comp.height) || 300;
+                              return Math.max(maxY, comp.y + compHeight + 50);
+                            }, 400)
+                          )}px`
+                        : "400px",
                     transform: `scale(1)`,
                     transformOrigin: "top left",
                   }}
@@ -759,15 +784,9 @@ ${propTypes}
                           : "cursor-pointer"
                       }`}
                       style={{
-                        left: `${component.x * (zoom / 100)}px`,
+                        left: 0,
                         top: `${component.y * (zoom / 100)}px`,
-                        width: component.width.includes("%")
-                          ? `${
-                              (parseInt(component.width) / 100) *
-                              artboardSize.width *
-                              (zoom / 100)
-                            }px`
-                          : component.width,
+                        width: "100%",
                         height:
                           component.height === "auto"
                             ? "auto"
