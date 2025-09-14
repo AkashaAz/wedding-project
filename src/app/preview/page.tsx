@@ -53,6 +53,9 @@ const COMPONENT_MAP = {
 };
 
 export default function PreviewPage() {
+  // Modal state for layout selection
+  const [showLayoutModal, setShowLayoutModal] = useState(false);
+  const [activeTab, setActiveTab] = useState<string>("");
   const [layoutDefinitions, setLayoutDefinitions] = useState<
     LayoutDefinition[]
   >([]);
@@ -486,7 +489,71 @@ ${propTypes}
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#e9ecf3] to-[#dbe6f6]">
+    <div className="relative min-h-screen flex items-center justify-center bg-gradient-to-br from-[#e9ecf3] to-[#dbe6f6]">
+      {/* Layout Selection Modal (always overlay, outside main layout) */}
+      {showLayoutModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div
+            className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl p-10 relative flex flex-col"
+            style={{ minHeight: "60vh", minWidth: "700px" }}
+          >
+            {/* Modal Header with Tabs */}
+            <div className="flex gap-2 border-b mb-4">
+              {Array.from(
+                new Set(layoutDefinitions.map((ld) => ld.category))
+              ).map((cat) => (
+                <button
+                  key={cat}
+                  className={`px-4 py-2 rounded-t-lg font-semibold focus:outline-none ${
+                    activeTab === cat
+                      ? "bg-blue-600 text-white"
+                      : "bg-gray-100 text-gray-700"
+                  }`}
+                  onClick={() => setActiveTab(cat)}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+            {/* Modal Content: Layouts by selected tab */}
+            <div className="grid grid-cols-2 gap-4 max-h-96 overflow-y-auto">
+              {layoutDefinitions
+                .filter((ld) => !activeTab || ld.category === activeTab)
+                .map((definition) => (
+                  <div
+                    key={definition.componentName}
+                    className="border border-gray-200 bg-white rounded-xl p-4 hover:border-blue-400 cursor-pointer transition-colors shadow-sm"
+                    onClick={() => {
+                      addComponentToArtboard(definition.componentName);
+                      setShowLayoutModal(false);
+                    }}
+                  >
+                    <div className="flex justify-between items-start mb-2">
+                      <h3 className="font-semibold text-gray-900 drop-shadow-sm">
+                        {definition.displayName}
+                      </h3>
+                      <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                        {definition.category}
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-700">
+                      {definition.description}
+                    </p>
+                  </div>
+                ))}
+            </div>
+            {/* Close Modal Button */}
+            <button
+              className="absolute top-3 right-3 text-gray-500 hover:text-red-500 text-2xl font-bold"
+              onClick={() => setShowLayoutModal(false)}
+              aria-label="Close"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="container mx-auto p-6 flex gap-6">
         {/* Component Library Sidebar */}
         <div
@@ -496,7 +563,6 @@ ${propTypes}
           <h2 className="text-xl font-bold mb-4 text-gray-900 drop-shadow-sm">
             Layout Components
           </h2>
-
           {/* Artboard Controls */}
           <div className="mb-6 p-4 bg-white/40 rounded-2xl border border-white/30 shadow-sm">
             <h3 className="font-semibold mb-3 text-gray-800">
@@ -576,7 +642,6 @@ ${propTypes}
               </button>
             </div>
           </div>
-
           {/* Mode Info */}
           {!previewMode && (
             <div className="mt-4 bg-white/40 p-4 rounded-xl border text-sm text-gray-600">
@@ -593,35 +658,18 @@ ${propTypes}
               </p>
             </div>
           )}
-
-          {/* Component List */}
+          {/* Layout Selection Button (opens modal) */}
           {!previewMode && (
-            <div className="space-y-3">
-              {layoutDefinitions.map((definition) => (
-                <div
-                  key={definition.componentName}
-                  className="border border-white/30 bg-white/60 rounded-xl p-4 hover:border-blue-300 cursor-pointer transition-colors shadow-sm"
-                  onClick={() =>
-                    addComponentToArtboard(definition.componentName)
-                  }
-                >
-                  <div className="flex justify-between items-start mb-2">
-                    <h3 className="font-semibold text-gray-900 drop-shadow-sm">
-                      {definition.displayName}
-                    </h3>
-                    <span className="text-xs text-gray-500 bg-white/60 px-2 py-1 rounded">
-                      {definition.category}
-                    </span>
-                  </div>
-                  <p className="text-sm text-gray-700">
-                    {definition.description}
-                  </p>
-                </div>
-              ))}
+            <div className="flex flex-col items-center mt-4">
+              <button
+                className="px-4 py-2 bg-blue-600 text-white rounded-xl shadow hover:bg-blue-700 transition-colors font-semibold"
+                onClick={() => setShowLayoutModal(true)}
+              >
+                Choose Layout
+              </button>
             </div>
           )}
         </div>
-
         {/* Main Artboard Area */}
         <div className="flex-1">
           <div
@@ -792,7 +840,6 @@ ${propTypes}
             </div>
           </div>
         </div>
-
         {/* Properties Panel */}
         {selectedComponent && !previewMode && (
           <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-white rounded-xl shadow-2xl border border-gray-200 p-6 max-w-md w-full mx-4 z-50">
