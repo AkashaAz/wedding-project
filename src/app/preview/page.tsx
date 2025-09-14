@@ -101,49 +101,49 @@ export default function PreviewPage() {
   }, []);
 
   // Function to recalculate positions based on real DOM heights
-  const recalculatePositions = React.useCallback(() => {
-    // Get current values directly to avoid recreating this function on every state change
-    const getCurrentComponents = () => artboardComponents;
-    const getCurrentZoom = () => zoom;
+  const recalculatePositions = React.useCallback(
+    (componentsToUpdate?: LayoutComponent[]) => {
+      // Use provided components or get current ones
+      const currentComponents = componentsToUpdate || artboardComponents;
+      const currentZoom = zoom;
 
-    const currentComponents = getCurrentComponents();
-    const currentZoom = getCurrentZoom();
+      if (currentComponents.length <= 1) return; // No need to recalculate for 0 or 1 component
 
-    if (currentComponents.length <= 1) return; // No need to recalculate for 0 or 1 component
+      // Wait for DOM to update then recalculate
+      setTimeout(() => {
+        let currentY = 0;
+        const updatedComponents = [...currentComponents];
 
-    // Wait for DOM to update then recalculate
-    setTimeout(() => {
-      let currentY = 0;
-      const updatedComponents = [...currentComponents];
+        // Sort by current Y position to maintain order
+        updatedComponents.sort((a, b) => a.y - b.y);
 
-      // Sort by current Y position to maintain order
-      updatedComponents.sort((a, b) => a.y - b.y);
-
-      updatedComponents.forEach((comp, index) => {
-        if (index === 0) {
-          // First component stays at top
-          comp.y = 0;
-          const domElement = componentRefs.current[comp.id];
-          if (domElement) {
-            currentY = domElement.offsetHeight / (currentZoom / 100); // No gap
+        updatedComponents.forEach((comp, index) => {
+          if (index === 0) {
+            // First component stays at top
+            comp.y = 0;
+            const domElement = componentRefs.current[comp.id];
+            if (domElement) {
+              currentY = domElement.offsetHeight / (currentZoom / 100); // No gap
+            } else {
+              currentY = 300; // Fallback
+            }
           } else {
-            currentY = 300; // Fallback
+            // Position subsequent components below previous ones
+            comp.y = currentY;
+            const domElement = componentRefs.current[comp.id];
+            if (domElement) {
+              currentY += domElement.offsetHeight / (currentZoom / 100); // No gap
+            } else {
+              currentY += 300; // Fallback
+            }
           }
-        } else {
-          // Position subsequent components below previous ones
-          comp.y = currentY;
-          const domElement = componentRefs.current[comp.id];
-          if (domElement) {
-            currentY += domElement.offsetHeight / (currentZoom / 100); // No gap
-          } else {
-            currentY += 300; // Fallback
-          }
-        }
-      });
+        });
 
-      setArtboardComponents(updatedComponents);
-    }, 100); // Small delay to ensure DOM is updated
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+        setArtboardComponents(updatedComponents);
+      }, 100); // Small delay to ensure DOM is updated
+    },
+    []
+  ); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Debounced version for performance
   const debouncedRecalculatePositions = React.useMemo(() => {
@@ -410,15 +410,17 @@ export default function PreviewPage() {
 
   // Delete component
   const deleteComponent = (componentId: string) => {
-    setArtboardComponents((prev) =>
-      prev.filter((comp) => comp.id !== componentId)
-    );
-    setSelectedComponent(null);
+    setArtboardComponents((prev) => {
+      const filtered = prev.filter((comp) => comp.id !== componentId);
 
-    // Recalculate positions after deletion to close gaps
-    setTimeout(() => {
-      debouncedRecalculatePositions();
-    }, 50); // Small delay to ensure state is updated
+      // Recalculate positions with the filtered components
+      setTimeout(() => {
+        recalculatePositions(filtered);
+      }, 200); // Longer delay to ensure DOM is updated after deletion
+
+      return filtered;
+    });
+    setSelectedComponent(null);
   };
 
   // Export artboard as JSON
